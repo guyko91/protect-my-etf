@@ -23,8 +23,8 @@ ETF 리스크 분석 및 텔레그램 알림 시스템
 ## 기술 스택
 
 ### Backend
-- Java 17
-- Spring Boot 3.2.11
+- Java 21
+- Spring Boot 3.3.5
 - MyBatis 3.0.3
 - Spring Scheduler
 
@@ -59,7 +59,7 @@ protect-my-etf/
 
 ### 사전 요구사항
 
-- Java 17 이상
+- Java 21
 - Docker & Docker Compose
 - Telegram Bot Token ([BotFather](https://t.me/botfather)에서 발급)
 

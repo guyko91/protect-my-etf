@@ -17,8 +17,8 @@ GOF와 QQQI ETF에 대한 리스크를 주기적으로 분석하여 텔레그램
 ## 기술 스택
 
 ### Backend
-- **Java 17+**
-- **Spring Boot 3.x**
+- **Java 21**
+- **Spring Boot 3.3.5**
 - **Spring Scheduler** - 배당일 기준 주기적 분석 및 알림
 - **Spring WebClient** - 비동기 HTTP 클라이언트
 - **Jsoup** - 웹 스크래핑 (CEF Connect, NEOS 사이트 등)
@@ -321,11 +321,20 @@ public class Position {
 - [x] Docker Compose 및 DB 스키마 설계
 - [ ] 텔레그램 봇 생성 및 연동 테스트 (다음 단계)
 
-### Phase 2: 도메인 모델 구현
-- [ ] ETF 추상 클래스 및 VOCaught 구현
-- [ ] GOF, QQQI 도메인 모델 구현
-- [ ] Portfolio 및 Position 모델 구현
-- [ ] RiskAnalyzer 도메인 서비스 구현
+### Phase 2: 도메인 모델 구현 (진행 중)
+- [x] Value Objects 구현 (Money, Premium, ROC, Leverage, TelegramChatId)
+- [x] 도메인 예외 클래스 작성
+- [x] Position 엔티티 구현 (추가 매수/매도 로직)
+- [x] Portfolio 엔티티 구현 (포지션 관리, 비중 계산)
+- [ ] User 도메인 모델 구현
+- [ ] ETF 추상 클래스 구현
+- [ ] GOF, QQQI 도메인 모델 구현 (리스크 분석 로직)
+- [ ] ETFSnapshot 구현 (시계열 데이터)
+- [ ] RiskMetrics, RiskLevel 구현
+- [ ] Dividend 도메인 모델 구현
+- [ ] NotificationMessage 구현
+- [ ] Port 인터페이스 정의 (Inbound/Outbound)
+- [ ] 도메인 모델 단위 테스트 (BDD 스타일)
 
 ### Phase 3: 웹 스크래핑 구현
 - [ ] Jsoup 기반 스크래퍼 공통 인터페이스 설계
@@ -334,8 +343,9 @@ public class Position {
 - [ ] 나스닥100 지수 데이터 수집 구현
 
 ### Phase 4: 데이터 저장 및 이력 관리
-- [ ] JPA 엔티티 설계
-- [ ] Repository 구현
+- [ ] MyBatis Mapper 인터페이스 설계
+- [ ] MyBatis XML Mapper 작성
+- [ ] Repository Adapter 구현 (Outbound Port 구현체)
 - [ ] 배당 히스토리 저장 로직
 - [ ] 리스크 메트릭 이력 관리
 
@@ -622,6 +632,246 @@ docker-compose up -d postgres
 - Chat ID: 사용자마다 고유
 - 개인 메시지 방식으로 1:1 알림
 - 봇 명령어로 사용자 등록 및 포트폴리오 관리
+
+---
+
+### 2025-11-20 (저녁) - 도메인 모델 설계 및 구현 시작
+
+#### 기술 스택 업그레이드
+
+1. **Java 21 업그레이드**
+   - Java 17 → Java 21
+   - Virtual Threads, Pattern Matching, Record 등 최신 기능 활용 가능
+   - build.gradle의 languageVersion 업데이트
+
+2. **Spring Boot 3.3.5 업그레이드**
+   - Spring Boot 3.2.11 → 3.3.5
+   - Java 21 완전 지원 버전
+   - Virtual Threads 공식 지원
+   - 안정성 검증된 버전 선택
+
+#### 도메인 모델 설계 결정사항
+
+1. **User-Portfolio 관계**
+   - 1:1 컴포지션 (User가 Portfolio 직접 소유)
+   - 현재는 사용자당 하나의 포트폴리오만 지원
+
+2. **ETF 데이터 관리**
+   - ETFSnapshot으로 시계열 데이터 분리
+   - ETF는 메타데이터만 관리 (symbol, name, type)
+   - 가격, NAV 등 변동 데이터는 ETFSnapshot에서 관리
+
+3. **리스크 분석 위치**
+   - 방식 1 채택: ETF 메서드 (도메인 모델 내부)
+   - GOF.analyzeRisk(), QQQI.analyzeRisk()
+   - Rich Domain Model 패턴
+   - 다형성 활용으로 OCP 준수
+
+4. **Position의 정체성**
+   - 엔티티로 결정
+   - 이유: 상태 변경 있음 (추가 매수 시 수량, 평단가 변경)
+   - 식별자(ID) 필요
+   - 생명주기 관리 필요
+
+5. **테스트 전략**
+   - 도메인 모델 작성 후 BDD 스타일 테스트 작성
+   - Given-When-Then 패턴
+
+#### 완료된 도메인 모델
+
+**1. Value Objects (Java 21 Record 활용)**
+
+```java
+// Money - 금액 계산
+public class Money {
+    public static final Money ZERO = new Money(BigDecimal.ZERO);
+    private final BigDecimal amount;
+
+    public Money add(Money other)
+    public Money subtract(Money other)
+    public Money multiply(int multiplier)
+    public Money divide(Money divisor)
+}
+
+// Premium - 프리미엄/할인율 (Record)
+public record Premium(BigDecimal value) {
+    public boolean isHighRisk()    // > 15%
+    public boolean isMediumRisk()  // 10~15%
+    public boolean isLowRisk()     // < 10%
+}
+
+// ROC - 자본 반환율 (Record)
+public record ROC(BigDecimal value) {
+    public boolean isCriticalForGOF()  // > 50%
+    public boolean isWarningForGOF()   // 30~50%
+    public boolean isCriticalForQQQI() // > 60%
+    public boolean isWarningForQQQI()  // 40~60%
+}
+
+// Leverage - 레버리지 비율 (Record)
+public record Leverage(BigDecimal current, BigDecimal previous) {
+    public boolean isIncreasing()
+    public boolean isDecreasing()
+    public BigDecimal getChangeRate()
+}
+
+// TelegramChatId - 텔레그램 Chat ID (Record)
+public record TelegramChatId(Long value) {
+    // validation in constructor
+}
+```
+
+**2. 도메인 예외**
+
+```java
+DomainException (기본 예외)
+├─ DuplicatePositionException
+├─ PositionNotFoundException
+├─ InvalidQuantityException
+└─ InsufficientQuantityException
+```
+
+**3. Position 엔티티**
+
+상태 변경 시나리오 분석:
+- 추가 매수: 수량, 평단가 재계산
+- 일부 매도: 수량 감소, 평단가 유지
+- 전량 매도: Position 삭제
+
+주요 비즈니스 로직:
+```java
+public class Position {
+    private Long id;
+    private String symbol;
+    private int quantity;
+    private Money averagePrice;
+
+    // 추가 매수 - 평단가 재계산
+    public void addQuantity(int additionalQuantity, Money purchasePrice)
+
+    // 일부 매도 - 평단가 유지
+    public void reduceQuantity(int quantityToSell)
+
+    // 현재 가치 계산
+    public Money calculateValue(Money currentPrice)
+
+    // 손익률 계산
+    public BigDecimal calculateProfitLossRate(Money currentPrice)
+
+    // 예상 배당금 계산
+    public Money calculateExpectedDividend(Money dividendPerShare)
+}
+```
+
+**4. Portfolio 엔티티**
+
+User의 일부로 1:1 관계:
+```java
+public class Portfolio {
+    private List<Position> positions;
+
+    // 포지션 관리
+    public void addPosition(String symbol, int quantity, Money averagePrice)
+    public void addToPosition(String symbol, int additionalQuantity, Money purchasePrice)
+    public void removeFromPosition(String symbol, int quantityToSell)
+    public void removePosition(String symbol)
+
+    // 포트폴리오 분석
+    public BigDecimal calculateWeight(String symbol, Map<String, Money> currentPrices)
+    public Money calculateTotalValue(Map<String, Money> currentPrices)
+
+    // 조회
+    public List<Position> getPositions()
+    public Position getPosition(String symbol)
+    public boolean hasPosition(String symbol)
+}
+```
+
+#### 파일 구조
+
+```
+domain/src/main/java/com/etf/risk/domain/
+├── model/
+│   ├── common/
+│   │   └── Money.java
+│   ├── etf/
+│   │   ├── Premium.java (Record)
+│   │   ├── ROC.java (Record)
+│   │   └── Leverage.java (Record)
+│   ├── portfolio/
+│   │   ├── Position.java
+│   │   └── Portfolio.java
+│   └── user/
+│       └── TelegramChatId.java (Record)
+└── exception/
+    ├── DomainException.java
+    ├── DuplicatePositionException.java
+    ├── PositionNotFoundException.java
+    ├── InvalidQuantityException.java
+    └── InsufficientQuantityException.java
+```
+
+#### 다음 단계 (Phase 2 계속)
+
+**남은 도메인 모델:**
+1. User 도메인 모델 작성
+2. ETF 추상 클래스 작성
+3. GOF, QQQI 도메인 모델 작성 (리스크 분석 로직 포함)
+4. ETFSnapshot 작성 (시계열 데이터)
+5. RiskMetrics, RiskLevel 작성
+6. Dividend 도메인 모델 작성
+7. NotificationMessage 작성
+
+**테스트 작성:**
+- Position 엔티티 BDD 테스트
+  - 추가 매수 시 평단가 재계산 검증
+  - 일부 매도 시 수량 감소 검증
+  - 손익률 계산 검증
+- Portfolio 엔티티 BDD 테스트
+  - 포지션 추가/제거 검증
+  - 비중 계산 검증
+  - 중복 포지션 예외 검증
+
+**Port 인터페이스 정의:**
+- Inbound Port (domain/port/in/)
+  - AnalyzeRiskUseCase
+  - SendNotificationUseCase
+  - RegisterUserUseCase
+  - ManagePortfolioUseCase
+- Outbound Port (domain/port/out/)
+  - ETFDataPort
+  - UserRepository
+  - PortfolioRepository
+  - DividendRepository
+  - NotificationPort
+
+#### 기술적 개선사항
+
+**Java 21 Record 활용:**
+- Value Objects를 Record로 작성하여 코드 간결화
+- equals(), hashCode(), toString() 자동 생성
+- 불변성 보장
+
+**장점:**
+- 보일러플레이트 코드 대폭 감소
+- 의도 명확화 (값 객체임을 코드로 표현)
+- 컴파일 타임 안전성
+
+#### 설계 패턴
+
+1. **Rich Domain Model**
+   - 도메인 모델이 비즈니스 로직 포함
+   - Position: 평단가 재계산, 손익률 계산
+   - Portfolio: 비중 계산, 총 가치 계산
+
+2. **Value Object Pattern**
+   - Money, Premium, ROC, Leverage, TelegramChatId
+   - 불변성, 자가 검증
+
+3. **Factory Method Pattern**
+   - Position.create()
+   - Portfolio.createEmpty()
+   - 생성 로직 캡슐화
 
 ## 참고 자료
 
