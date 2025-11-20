@@ -5,6 +5,7 @@ import com.etf.risk.domain.model.portfolio.Position;
 import com.etf.risk.domain.model.user.User;
 import com.etf.risk.domain.port.in.ManagePortfolioUseCase;
 import com.etf.risk.domain.port.out.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,13 +13,10 @@ import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class PortfolioManagementService implements ManagePortfolioUseCase {
 
     private final UserRepository userRepository;
-
-    public PortfolioManagementService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     @Override
     @Transactional

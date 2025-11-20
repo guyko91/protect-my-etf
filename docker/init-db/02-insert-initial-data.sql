@@ -1,8 +1,8 @@
 -- ETF 메타데이터 초기 데이터
-INSERT INTO etf_metadata (symbol, name, type, payment_day_of_month, ex_dividend_day_offset, description) VALUES
-('GOF', 'Guggenheim Strategic Opportunities Fund', 'CEF', 31, -16,
+INSERT INTO etf_metadata (symbol, name, types, payment_day_of_month, ex_dividend_day_offset, description) VALUES
+('GOF', 'Guggenheim Strategic Opportunities Fund', '["CEF", "LEVERAGED", "DIVIDEND"]'::jsonb, 31, -16,
  'Monthly dividend CEF with leverage. Monitor premium/discount and ROC.'),
-('QQQI', 'NEOS Nasdaq 100 High Income ETF', 'ETF', 27, -2,
+('QQQI', 'NEOS Nasdaq 100 High Income ETF', '["COVERED_CALL", "DIVIDEND", "INDEX"]'::jsonb, 27, -2,
  'Monthly dividend ETF using covered call strategy on NASDAQ-100.');
 
 -- 초기 배당 내역 (2024년 데이터 - 예시)

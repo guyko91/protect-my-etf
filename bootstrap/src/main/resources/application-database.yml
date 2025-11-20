@@ -16,15 +16,6 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-# MyBatis 설정
-mybatis:
-  mapper-locations: classpath:mybatis/mapper/**/*.xml
-  type-aliases-package: com.etf.risk.domain.model
-  configuration:
-    map-underscore-to-camel-case: true
-    default-fetch-size: 100
-    default-statement-timeout: 30
-
 ---
 # Production 환경 - Database 설정
 spring:
@@ -47,7 +38,7 @@ spring:
 # MyBatis 설정
 mybatis:
   mapper-locations: classpath:mybatis/mapper/**/*.xml
-  type-aliases-package: com.etf.risk.domain.model
+  type-aliases-package: com.etf.risk.adapter.persistence.vo
   configuration:
     map-underscore-to-camel-case: true
     default-fetch-size: 100

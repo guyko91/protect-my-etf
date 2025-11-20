@@ -11,7 +11,7 @@ CREATE TABLE users (
 CREATE TABLE etf_metadata (
     symbol VARCHAR(10) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) NOT NULL, -- CEF, ETF
+    types JSONB NOT NULL, -- ETF 타입 배열 (예: ["CEF", "LEVERAGED", "DIVIDEND"])
     payment_day_of_month INT NOT NULL, -- 배당 지급일 (매달 몇일)
     ex_dividend_day_offset INT, -- Ex-Dividend Date 오프셋 (지급일 기준 -N일)
     description TEXT,

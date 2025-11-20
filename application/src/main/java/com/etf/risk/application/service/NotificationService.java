@@ -13,27 +13,19 @@ import com.etf.risk.domain.port.in.SendNotificationUseCase;
 import com.etf.risk.domain.port.out.DividendRepository;
 import com.etf.risk.domain.port.out.NotificationPort;
 import com.etf.risk.domain.port.out.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class NotificationService implements SendNotificationUseCase {
 
     private final NotificationPort notificationPort;
     private final UserRepository userRepository;
     private final DividendRepository dividendRepository;
     private final AnalyzeRiskUseCase analyzeRiskUseCase;
-
-    public NotificationService(NotificationPort notificationPort,
-                               UserRepository userRepository,
-                               DividendRepository dividendRepository,
-                               AnalyzeRiskUseCase analyzeRiskUseCase) {
-        this.notificationPort = notificationPort;
-        this.userRepository = userRepository;
-        this.dividendRepository = dividendRepository;
-        this.analyzeRiskUseCase = analyzeRiskUseCase;
-    }
 
     @Override
     public void sendNotification(NotificationMessage message) {

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.etf.risk.adapter.persistence.mapper.UserPortfolioMapper">
+
+    <insert id="insertPortfolio" parameterType="UserPortfolioVO" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_portfolios (user_id, etf_symbol, quantity, average_price, created_at, updated_at)
+        VALUES (#{userId}, #{etfSymbol}, #{quantity}, #{averagePrice}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updatePortfolio" parameterType="UserPortfolioVO">
+        UPDATE user_portfolios
+        SET quantity = #{quantity},
+            average_price = #{averagePrice},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deletePortfolio">
+        DELETE FROM user_portfolios
+        WHERE id = #{id}
+    </delete>
+
+    <select id="selectByUserId" resultType="UserPortfolioVO">
+        SELECT id, user_id, etf_symbol, quantity, average_price, created_at, updated_at
+        FROM user_portfolios
+        WHERE user_id = #{userId}
+        ORDER BY etf_symbol
+    </select>
+
+    <select id="selectByUserIdAndSymbol" resultType="UserPortfolioVO">
+        SELECT id, user_id, etf_symbol, quantity, average_price, created_at, updated_at
+        FROM user_portfolios
+        WHERE user_id = #{userId} AND etf_symbol = #{etfSymbol}
+    </select>
+
+</mapper>

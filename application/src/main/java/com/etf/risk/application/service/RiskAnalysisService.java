@@ -7,6 +7,7 @@ import com.etf.risk.domain.model.user.User;
 import com.etf.risk.domain.port.in.AnalyzeRiskUseCase;
 import com.etf.risk.domain.port.out.ETFDataPort;
 import com.etf.risk.domain.port.out.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,15 +15,11 @@ import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class RiskAnalysisService implements AnalyzeRiskUseCase {
 
     private final ETFDataPort etfDataPort;
     private final UserRepository userRepository;
-
-    public RiskAnalysisService(ETFDataPort etfDataPort, UserRepository userRepository) {
-        this.etfDataPort = etfDataPort;
-        this.userRepository = userRepository;
-    }
 
     @Override
     public RiskMetrics analyzeETFRisk(String etfSymbol) {
