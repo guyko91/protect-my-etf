@@ -1,0 +1,27 @@
+# Local 환경 - Scheduler 설정
+spring:
+  config:
+    activate:
+      on-profile: local
+
+scheduler:
+  enabled: true
+  dividend:
+    # 매달 말일 18:00 (KST)
+    # 테스트를 위해 매일 18:00 실행
+    cron: "0 0 18 * * ?"
+    zone: Asia/Seoul
+
+---
+# Production 환경 - Scheduler 설정
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+scheduler:
+  enabled: true
+  dividend:
+    # 매달 말일 18:00 (KST)
+    cron: "0 0 18 L * ?"
+    zone: Asia/Seoul

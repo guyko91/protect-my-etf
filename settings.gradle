@@ -1,0 +1,15 @@
+rootProject.name = 'protect-my-etf'
+
+// Core modules
+include 'domain'
+include 'application'
+
+// Infrastructure modules
+include 'infrastructure:adapter-web'
+include 'infrastructure:adapter-scheduler'
+include 'infrastructure:adapter-persistence'
+include 'infrastructure:adapter-scraper'
+include 'infrastructure:adapter-telegram'
+
+// Bootstrap
+include 'bootstrap'

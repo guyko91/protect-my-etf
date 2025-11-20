@@ -11,6 +11,8 @@ GOF와 QQQI ETF에 대한 리스크를 주기적으로 분석하여 텔레그램
 5. 무조건 코드 수정하지 말고, 수정 방향을 확인받고 진행
 6. **진행 사항은 CLAUDE.md 파일에 다음 세션과의 연속성을 위해 자세하게 정리**
 7. docker compose 기반의 프로젝트로 구성한다
+8. unit test 는 필수로 작성한다. (그 외 테스트는 지시에 의해 작성한다.)
+9. 지나친 주석은 작성하지 않으며, 주석 및 텍스트 작성 시, 이모지는 사용하지 않고 가독성 좋게 작성한다. 
 
 ## 기술 스택
 
@@ -23,7 +25,7 @@ GOF와 QQQI ETF에 대한 리스크를 주기적으로 분석하여 텔레그램
 
 ### Database
 - **PostgreSQL** - ETF 히스토리, 배당 내역, 리스크 메트릭 저장
-- **Spring Data JPA** - ORM
+- **MyBatis 3.0.3** - SQL Mapper (도메인 순수성 유지 위해 JPA 대신 채택)
 
 ### External Integration
 - **Telegram Bot API** - 알림 전송
@@ -34,72 +36,100 @@ GOF와 QQQI ETF에 대한 리스크를 주기적으로 분석하여 텔레그램
 
 ## 아키텍처 설계
 
-### Hexagonal Architecture (Ports & Adapters)
+### Hexagonal Architecture (Ports & Adapters) - 멀티모듈 구조
+
 ```
-src/main/java/com/etf/risk
-├── domain                          # 도메인 계층
-│   ├── etf
-│   │   ├── ETF.java               # ETF 추상 클래스/인터페이스
-│   │   ├── GOF.java               # GOF 도메인 모델
-│   │   ├── QQQI.java              # QQQI 도메인 모델
-│   │   ├── Premium.java           # 프리미엄/할인율 VO
-│   │   ├── Leverage.java          # 레버리지 비율 VO
-│   │   └── ROC.java               # ROC(자본금 반환) VO
-│   ├── portfolio
-│   │   ├── Portfolio.java         # 포트폴리오 애그리거트
-│   │   ├── Position.java          # 포지션 엔티티
-│   │   └── HoldingInfo.java       # 보유 정보 VO (수동 입력)
-│   ├── risk
-│   │   ├── RiskMetrics.java       # 리스크 메트릭 VO
-│   │   ├── RiskLevel.java         # 리스크 레벨 enum
-│   │   └── RiskAnalyzer.java      # 도메인 서비스
-│   ├── dividend
-│   │   ├── Dividend.java          # 배당 엔티티
-│   │   └── DividendSchedule.java  # 배당 스케줄 VO
-│   └── notification
-│       └── NotificationMessage.java # 알림 메시지 VO
+protect-my-etf/
+├── domain/                         # 순수 도메인 로직 + Port 인터페이스
+│   └── src/main/java/com/etf/risk/domain/
+│       ├── model/                  # 도메인 모델
+│       │   ├── etf/
+│       │   │   ├── ETF.java
+│       │   │   ├── GOF.java
+│       │   │   ├── QQQI.java
+│       │   │   ├── Premium.java
+│       │   │   ├── Leverage.java
+│       │   │   └── ROC.java
+│       │   ├── portfolio/
+│       │   │   ├── Portfolio.java
+│       │   │   └── Position.java
+│       │   ├── user/              # 다중 사용자 지원
+│       │   │   └── User.java
+│       │   ├── risk/
+│       │   │   ├── RiskMetrics.java
+│       │   │   ├── RiskLevel.java
+│       │   │   └── RiskAnalyzer.java
+│       │   ├── dividend/
+│       │   │   └── Dividend.java
+│       │   └── notification/
+│       │       └── NotificationMessage.java
+│       └── port/                   # Port 인터페이스 (도메인 경계)
+│           ├── in/                 # Inbound Port (Use Case)
+│           │   ├── AnalyzeRiskUseCase.java
+│           │   ├── SendNotificationUseCase.java
+│           │   ├── RegisterUserUseCase.java
+│           │   └── ManagePortfolioUseCase.java
+│           └── out/                # Outbound Port
+│               ├── ETFDataPort.java
+│               ├── UserRepository.java
+│               ├── PortfolioRepository.java
+│               ├── DividendRepository.java
+│               └── NotificationPort.java
 │
-├── application                     # 애플리케이션 계층
-│   ├── port
-│   │   ├── in                     # Inbound Port (Use Cases)
-│   │   │   ├── AnalyzeRiskUseCase.java
-│   │   │   ├── SendDividendNotificationUseCase.java
-│   │   │   └── UpdatePortfolioUseCase.java
-│   │   └── out                    # Outbound Port
-│   │       ├── ETFDataPort.java   # ETF 데이터 조회
-│   │       ├── RiskRepository.java
-│   │       ├── PortfolioRepository.java
-│   │       └── NotificationPort.java
-│   └── service
-│       ├── RiskAnalysisService.java
-│       ├── DividendNotificationService.java
-│       └── PortfolioManagementService.java
+├── application/                    # Use Case 구현체
+│   └── src/main/java/com/etf/risk/application/
+│       └── service/
+│           ├── RiskAnalysisService.java
+│           ├── NotificationService.java
+│           ├── UserRegistrationService.java
+│           └── PortfolioManagementService.java
 │
-├── adapter                         # 어댑터 계층
-│   ├── in
-│   │   ├── scheduler
-│   │   │   ├── DividendDateScheduler.java  # 배당일 기준 스케줄러
-│   │   │   └── RiskAnalysisScheduler.java
-│   │   └── rest                   # (선택) 수동 조회 API
-│   │       └── PortfolioController.java
-│   └── out
-│       ├── persistence
-│       │   ├── ETFJpaEntity.java
-│       │   ├── PortfolioJpaEntity.java
-│       │   ├── RiskMetricsJpaEntity.java
-│       │   └── JpaRepositoryAdapter.java
-│       ├── scraper                # 웹 스크래핑 어댑터
-│       │   ├── GOFDataScraper.java
-│       │   ├── QQQIDataScraper.java
-│       │   └── MarketDataScraper.java
-│       └── notification
-│           └── TelegramBotAdapter.java
+├── infrastructure/
+│   ├── adapter-web/               # Inbound Adapter (REST API)
+│   │   └── src/main/java/com/etf/risk/adapter/web/
+│   │       ├── controller/
+│   │       └── dto/
+│   │
+│   ├── adapter-scheduler/         # Inbound Adapter (스케줄러)
+│   │   └── src/main/java/com/etf/risk/adapter/scheduler/
+│   │       └── DividendDateScheduler.java
+│   │
+│   ├── adapter-persistence/       # Outbound Adapter (MyBatis)
+│   │   └── src/main/java/com/etf/risk/adapter/persistence/
+│   │       ├── mapper/            # MyBatis Mapper 인터페이스
+│   │       ├── dto/               # DB DTO
+│   │       └── src/main/resources/mybatis/mapper/  # XML Mapper
+│   │
+│   ├── adapter-scraper/          # Outbound Adapter (웹 스크래핑)
+│   │   └── src/main/java/com/etf/risk/adapter/scraper/
+│   │       ├── GOFDataScraper.java
+│   │       ├── QQQIDataScraper.java
+│   │       └── ETFDataAdapter.java
+│   │
+│   └── adapter-telegram/         # Outbound Adapter (텔레그램 봇)
+│       └── src/main/java/com/etf/risk/adapter/telegram/
+│           ├── TelegramBotAdapter.java
+│           └── command/          # 봇 명령어 핸들러
 │
-└── infrastructure                  # 인프라 계층
-    └── config
-        ├── JpaConfig.java
-        ├── SchedulerConfig.java
-        └── TelegramConfig.java
+└── bootstrap/                     # Spring Boot 진입점
+    └── src/main/java/com/etf/risk/
+        ├── ProtectMyEtfApplication.java
+        ├── config/
+        └── src/main/resources/
+            ├── application.yml
+            ├── application-database.yml
+            ├── application-telegram.yml
+            └── application-scheduler.yml
+```
+
+### 의존성 방향
+```
+bootstrap → infrastructure → application → domain
+
+- domain: 순수 Java, 외부 의존성 없음
+- application: domain 의존
+- infrastructure/adapter-*: application, domain 의존
+- bootstrap: 모든 모듈 조합
 ```
 
 ## 요구사항 정리
@@ -157,9 +187,14 @@ src/main/java/com/etf/risk
 - **Payment Date**: Ex-Dividend Date 약 2일 후
 - **알림 시점**: 매달 말일 (Payment Date 이후) 리스크 분석 및 알림 발송
 
-### 스케줄링 전략
-- **메인 스케줄**: 매달 말일 (30일 또는 31일) 18:00에 두 ETF 모두 분석 및 알림 발송
-- **데이터 수집**: 배당 지급 후 최신 NAV, ROC, 프리미엄/할인율 등 수집
+### 스케줄링 전략 (다중 사용자 고려)
+- **스케줄**: 매일 18:00에 실행
+- **동작 방식**:
+  1. 오늘 날짜가 배당일(payment_day_of_month)인 ETF 조회
+  2. 해당 ETF를 보유한 사용자 목록 조회
+  3. 각 사용자에게 개인화된 배당 알림 발송
+  4. 리스크 분석 수행 후 알림에 포함
+- **개인화**: 사용자별 보유 수량, 평단가, 예상 배당금 계산
 
 ## 웹 스크래핑 대상 사이트
 
@@ -278,12 +313,13 @@ public class Position {
 
 ## 구현 계획
 
-### Phase 1: 기본 인프라 구축 (현재)
+### Phase 1: 기본 인프라 구축 (완료)
 - [x] 프로젝트 설계 및 요구사항 정리
 - [x] 배당 스케줄 조사
-- [ ] Spring Boot 프로젝트 초기 구조 생성
-- [ ] 웹 스크래핑 대상 사이트 상세 분석
-- [ ] 텔레그램 봇 생성 및 연동 테스트
+- [x] Spring Boot 멀티모듈 프로젝트 구조 생성
+- [x] 웹 스크래핑 대상 사이트 상세 분석
+- [x] Docker Compose 및 DB 스키마 설계
+- [ ] 텔레그램 봇 생성 및 연동 테스트 (다음 단계)
 
 ### Phase 2: 도메인 모델 구현
 - [ ] ETF 추상 클래스 및 VOCaught 구현
@@ -414,6 +450,178 @@ Yahoo Finance가 JavaScript 렌더링이 필요하여 다음 대안 검토:
 2. 텔레그램 봇 생성 및 설정
 3. 기본 스크래퍼 구현 (Guggenheim, NEOS)
 4. Yahoo Finance API 연동 테스트
+
+---
+
+### 2025-11-20 (오후) - Spring Boot 멀티모듈 프로젝트 생성
+
+#### 주요 설계 결정 사항
+
+1. **멀티모듈 구조 채택**
+   - 의존성 물리적 격리로 Hexagonal Architecture 강화
+   - 모듈 구성: domain, application, infrastructure(5개 adapter), bootstrap
+   - core 모듈 제외 (불필요한 복잡성 방지)
+
+2. **MyBatis 선택 (JPA 대신)**
+   - 이유: 도메인 모델 순수성 유지 (JPA 어노테이션 오염 방지)
+   - Hexagonal Architecture와 더 잘 맞음 (도메인과 영속성 완전 분리)
+   - 복잡한 분석 쿼리 작성 용이 (배당 히스토리, 리스크 메트릭 시계열)
+   - 보일러플레이트 부담 적음 (프로젝트 규모 고려)
+
+3. **다중 사용자 지원 설계**
+   - User 도메인 추가
+   - 사용자별 텔레그램 Chat ID 관리
+   - 사용자별 포트폴리오 개인화
+   - ETF 메타데이터 테이블로 동적 ETF 관리
+
+4. **하이브리드 접근 방식 (텔레그램 + REST API)**
+   - Phase 1 (MVP): 텔레그램 봇 명령어
+     - `/start`, `/register`, `/portfolio`, `/remove` 등
+     - 빠른 프로토타입 검증
+   - Phase 2: REST API 추가 (향후 웹 UI 연동)
+     - adapter-web 모듈로 인프라 준비 완료
+
+5. **모듈별 설정 파일 분리**
+   - application.yml (공통)
+   - application-database.yml (DB 설정)
+   - application-telegram.yml (텔레그램 봇 설정)
+   - application-scheduler.yml (스케줄러 설정)
+   - 각 파일 내부에서 `---` 구분자로 local/prod 환경 분리
+
+#### 완료 작업
+
+1. **멀티모듈 프로젝트 구조 생성**
+   - settings.gradle: 7개 모듈 정의
+   - 루트 build.gradle: 공통 설정
+   - 각 모듈별 build.gradle 작성 (의존성 정의)
+
+2. **디렉토리 구조 생성**
+   - 모든 모듈의 src/main/java, src/test/java 구조
+   - MyBatis XML Mapper 경로 (infrastructure/adapter-persistence)
+
+3. **설정 파일 작성**
+   - application.yml (로깅, 서버 설정)
+   - application-database.yml (PostgreSQL, MyBatis, HikariCP)
+   - application-telegram.yml (봇 토큰, Chat ID)
+   - application-scheduler.yml (배당 알림 cron)
+
+4. **Docker Compose 설정**
+   - PostgreSQL 15 컨테이너
+   - pgAdmin 4 (DB 관리 도구)
+   - 볼륨 마운트 및 헬스체크
+
+5. **데이터베이스 스키마 설계**
+   - users: 사용자 정보 (telegram_chat_id)
+   - etf_metadata: ETF 메타데이터 (배당일 정보 포함)
+   - user_portfolios: 사용자별 ETF 보유 현황
+   - dividend_history: 배당 내역
+   - risk_metrics_history: 리스크 메트릭 히스토리
+   - 초기 데이터: GOF, QQQI 메타데이터 삽입
+
+6. **Bootstrap 메인 클래스**
+   - ProtectMyEtfApplication.java
+   - @EnableScheduling 활성화
+
+7. **.gitignore 업데이트**
+   - IntelliJ, Eclipse, VS Code 지원
+   - Docker volumes 제외
+   - 환경변수 파일 제외
+
+8. **README.md 작성**
+   - 프로젝트 개요 및 주요 기능
+   - 시작 가이드
+   - 텔레그램 봇 명령어 문서화
+   - 아키텍처 설명
+
+#### 데이터베이스 스키마 상세
+
+```sql
+users (
+  id BIGSERIAL PRIMARY KEY,
+  telegram_chat_id BIGINT UNIQUE NOT NULL,
+  telegram_username VARCHAR(100),
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+)
+
+etf_metadata (
+  symbol VARCHAR(10) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  payment_day_of_month INT NOT NULL,  -- 매달 몇일에 배당 지급
+  ex_dividend_day_offset INT,
+  description TEXT
+)
+
+user_portfolios (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id),
+  etf_symbol VARCHAR(10) REFERENCES etf_metadata(symbol),
+  quantity INT NOT NULL,
+  average_price DECIMAL(10, 2) NOT NULL,
+  UNIQUE(user_id, etf_symbol)
+)
+
+dividend_history (
+  etf_symbol VARCHAR(10) REFERENCES etf_metadata(symbol),
+  ex_dividend_date DATE NOT NULL,
+  payment_date DATE NOT NULL,
+  amount_per_share DECIMAL(10, 4) NOT NULL,
+  roc_percentage DECIMAL(5, 2)
+)
+
+risk_metrics_history (
+  etf_symbol VARCHAR(10) REFERENCES etf_metadata(symbol),
+  recorded_date DATE NOT NULL,
+  nav DECIMAL(10, 4),
+  current_price DECIMAL(10, 4),
+  premium_discount DECIMAL(5, 2),  -- GOF
+  leverage_ratio DECIMAL(5, 2),     -- GOF
+  nasdaq_trend DECIMAL(5, 2)        -- QQQI
+)
+```
+
+#### 프로젝트 실행 준비 완료
+
+```bash
+# 데이터베이스 실행
+docker-compose up -d postgres
+
+# 애플리케이션 빌드 (다음 세션에서 도메인 모델 작성 후)
+./gradlew build
+
+# 애플리케이션 실행
+./gradlew :bootstrap:bootRun
+```
+
+#### 다음 단계 (Phase 2: 도메인 모델 구현)
+
+1. User 도메인 모델 작성
+2. ETF 추상 클래스 및 GOF, QQQI 구현
+3. Portfolio, Position 모델 작성
+4. Value Objects: Premium, Leverage, ROC
+5. Port 인터페이스 정의 (in/out)
+6. 단위 테스트 작성 (도메인 로직 검증)
+
+#### 기술적 고려사항
+
+**Port 위치 결정**
+- Port 인터페이스는 domain 모듈에 배치
+- 이유: Port는 도메인의 경계를 정의하는 인터페이스
+- Inbound Port (Use Case): application에서 구현
+- Outbound Port (Repository 등): infrastructure에서 구현
+
+**스케줄러 전략**
+- 매일 18:00 실행
+- 오늘이 배당일인 ETF 조회 (etf_metadata.payment_day_of_month)
+- 해당 ETF 보유 사용자에게 개인화된 알림 발송
+- 단순하면서도 확장 가능한 구조
+
+**텔레그램 봇 동작 방식**
+- Bot Token: 하나 (BotFather에서 발급)
+- Chat ID: 사용자마다 고유
+- 개인 메시지 방식으로 1:1 알림
+- 봇 명령어로 사용자 등록 및 포트폴리오 관리
 
 ## 참고 자료
 

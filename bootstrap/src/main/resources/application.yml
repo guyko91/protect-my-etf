@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: protect-my-etf
+
+  profiles:
+    active: local
+    group:
+      local:
+        - database
+        - telegram
+        - scheduler
+      prod:
+        - database
+        - telegram
+        - scheduler
+
+# 로깅 설정
+logging:
+  level:
+    root: INFO
+    com.etf.risk: DEBUG
+    org.springframework.web: INFO
+    org.mybatis: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 서버 설정
+server:
+  port: 8080
+  servlet:
+    context-path: /api

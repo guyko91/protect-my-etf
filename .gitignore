@@ -1,0 +1,62 @@
+### Java ###
+*.class
+*.log
+*.jar
+*.war
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# IDE specific
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+### VS Code ###
+.vscode/
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+### OS ###
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+.env
+.env.local
+.env.*.local
+
+# Spring Boot
+spring-output/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker volumes
+docker/volumes/

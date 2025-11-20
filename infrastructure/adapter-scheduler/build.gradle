@@ -1,0 +1,27 @@
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+dependencies {
+    // Domain & Application
+    implementation project(':domain')
+    implementation project(':application')
+
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// 이 모듈은 실행 가능한 jar를 생성하지 않음
+bootJar {
+    enabled = false
+}
+
+jar {
+    enabled = true
+}
