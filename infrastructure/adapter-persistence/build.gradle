@@ -14,7 +14,10 @@ dependencies {
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
 
     // Database
-    runtimeOnly 'org.postgresql:postgresql'
+    implementation 'org.postgresql:postgresql'
+
+    // Jackson (JSONB 처리)
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.etf.risk.adapter.persistence.mapper.ETFMetadataMapper">
+
+    <resultMap id="ETFMetadataResultMap" type="ETFMetadataVO">
+        <id property="symbol" column="symbol"/>
+        <result property="name" column="name"/>
+        <result property="types" column="types" typeHandler="com.etf.risk.adapter.persistence.typehandler.ETFTypeSetTypeHandler"/>
+        <result property="paymentDayOfMonth" column="payment_day_of_month"/>
+        <result property="exDividendDayOffset" column="ex_dividend_day_offset"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertMetadata" parameterType="ETFMetadataVO">
+        INSERT INTO etf_metadata (symbol, name, types, payment_day_of_month, ex_dividend_day_offset, description, created_at, updated_at)
+        VALUES (#{symbol}, #{name}, #{types, typeHandler=com.etf.risk.adapter.persistence.typehandler.ETFTypeSetTypeHandler},
+                #{paymentDayOfMonth}, #{exDividendDayOffset}, #{description}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateMetadata" parameterType="ETFMetadataVO">
+        UPDATE etf_metadata
+        SET name = #{name},
+            types = #{types, typeHandler=com.etf.risk.adapter.persistence.typehandler.ETFTypeSetTypeHandler},
+            payment_day_of_month = #{paymentDayOfMonth},
+            ex_dividend_day_offset = #{exDividendDayOffset},
+            description = #{description},
+            updated_at = #{updatedAt}
+        WHERE symbol = #{symbol}
+    </update>
+
+    <select id="selectBySymbol" resultMap="ETFMetadataResultMap">
+        SELECT symbol, name, types, payment_day_of_month, ex_dividend_day_offset, description, created_at, updated_at
+        FROM etf_metadata
+        WHERE symbol = #{symbol}
+    </select>
+
+</mapper>

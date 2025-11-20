@@ -13,6 +13,9 @@ dependencies {
     // Web Scraping
     implementation 'org.jsoup:jsoup:1.17.2'
 
+    // JSON Parsing
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

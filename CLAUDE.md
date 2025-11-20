@@ -12,7 +12,14 @@ GOF와 QQQI ETF에 대한 리스크를 주기적으로 분석하여 텔레그램
 6. **진행 사항은 CLAUDE.md 파일에 다음 세션과의 연속성을 위해 자세하게 정리**
 7. docker compose 기반의 프로젝트로 구성한다
 8. unit test 는 필수로 작성한다. (그 외 테스트는 지시에 의해 작성한다.)
-9. 지나친 주석은 작성하지 않으며, 주석 및 텍스트 작성 시, 이모지는 사용하지 않고 가독성 좋게 작성한다. 
+9. 지나친 주석은 작성하지 않으며, 주석 및 텍스트 작성 시, 이모지는 사용하지 않고 가독성 좋게 작성한다.
+10. 라이브러리 설정은 가능하다면 yml 설정보다는 자바 설정으로 작성한다.
+11. 레이어 간 객체 변환은 @Component 클래스로 작성한다 (복잡한 도메인 변환에는 명시적 변환 로직이 더 명확함).
+12. Persistence 레이어에서 MyBatis와 통신하는 객체는 VO(Value Object)로 네이밍한다.
+13. Adapter 구현체는 XXXAdapter 네이밍 규칙을 따른다 (예: UserMybatisAdapter, DividendMybatisAdapter).
+14. 도메인 객체에 변경을 발생시키는 요청 객체는 XXXCommand로 네이밍한다 (예: CreateUserCommand, AddPositionCommand).
+15. MapStruct는 단순한 DTO 변환이 많아질 경우 재도입을 고려한다.
+16. 의존성 주입은 Lombok @RequiredArgsConstructor를 사용하여 생성자 주입으로 처리한다 (final 필드로 선언된 의존성에 대해 자동으로 생성자 생성).
 
 ## 기술 스택
 
@@ -687,32 +694,32 @@ public class Money {
     public static final Money ZERO = new Money(BigDecimal.ZERO);
     private final BigDecimal amount;
 
-    public Money add(Money other)
-    public Money subtract(Money other)
-    public Money multiply(int multiplier)
-    public Money divide(Money divisor)
+    public Money add(Money other);
+    public Money subtract(Money other);
+    public Money multiply(int multiplier);
+    public Money divide(Money divisor);
 }
 
 // Premium - 프리미엄/할인율 (Record)
 public record Premium(BigDecimal value) {
-    public boolean isHighRisk()    // > 15%
-    public boolean isMediumRisk()  // 10~15%
-    public boolean isLowRisk()     // < 10%
+    public boolean isHighRisk();    // > 15%
+    public boolean isMediumRisk();  // 10~15%
+    public boolean isLowRisk();     // < 10%
 }
 
 // ROC - 자본 반환율 (Record)
 public record ROC(BigDecimal value) {
-    public boolean isCriticalForGOF()  // > 50%
-    public boolean isWarningForGOF()   // 30~50%
-    public boolean isCriticalForQQQI() // > 60%
-    public boolean isWarningForQQQI()  // 40~60%
+    public boolean isCriticalForGOF();  // > 50%
+    public boolean isWarningForGOF();   // 30~50%
+    public boolean isCriticalForQQQI(); // > 60%
+    public boolean isWarningForQQQI();  // 40~60%
 }
 
 // Leverage - 레버리지 비율 (Record)
 public record Leverage(BigDecimal current, BigDecimal previous) {
-    public boolean isIncreasing()
-    public boolean isDecreasing()
-    public BigDecimal getChangeRate()
+    public boolean isIncreasing();
+    public boolean isDecreasing();
+    public BigDecimal getChangeRate();
 }
 
 // TelegramChatId - 텔레그램 Chat ID (Record)
@@ -747,19 +754,18 @@ public class Position {
     private Money averagePrice;
 
     // 추가 매수 - 평단가 재계산
-    public void addQuantity(int additionalQuantity, Money purchasePrice)
-
+    public void addQuantity(int additionalQuantity, Money purchasePrice);
     // 일부 매도 - 평단가 유지
-    public void reduceQuantity(int quantityToSell)
+    public void reduceQuantity(int quantityToSell);
 
     // 현재 가치 계산
-    public Money calculateValue(Money currentPrice)
+    public Money calculateValue(Money currentPrice);
 
     // 손익률 계산
-    public BigDecimal calculateProfitLossRate(Money currentPrice)
+    public BigDecimal calculateProfitLossRate(Money currentPrice);
 
     // 예상 배당금 계산
-    public Money calculateExpectedDividend(Money dividendPerShare)
+    public Money calculateExpectedDividend(Money dividendPerShare);
 }
 ```
 
@@ -771,19 +777,19 @@ public class Portfolio {
     private List<Position> positions;
 
     // 포지션 관리
-    public void addPosition(String symbol, int quantity, Money averagePrice)
-    public void addToPosition(String symbol, int additionalQuantity, Money purchasePrice)
-    public void removeFromPosition(String symbol, int quantityToSell)
-    public void removePosition(String symbol)
+    public void addPosition(String symbol, int quantity, Money averagePrice);
+    public void addToPosition(String symbol, int additionalQuantity, Money purchasePrice);
+    public void removeFromPosition(String symbol, int quantityToSell);
+    public void removePosition(String symbol);
 
     // 포트폴리오 분석
-    public BigDecimal calculateWeight(String symbol, Map<String, Money> currentPrices)
-    public Money calculateTotalValue(Map<String, Money> currentPrices)
+    public BigDecimal calculateWeight(String symbol, Map<String, Money> currentPrices);
+    public Money calculateTotalValue(Map<String, Money> currentPrices);
 
     // 조회
-    public List<Position> getPositions()
-    public Position getPosition(String symbol)
-    public boolean hasPosition(String symbol)
+    public List<Position> getPositions();
+    public Position getPosition(String symbol);
+    public boolean hasPosition(String symbol);
 }
 ```
 
@@ -1551,5 +1557,344 @@ this.amount = amount.setScale(4, RoundingMode.HALF_UP);
 - [ ] 환경별 프로파일 (local, prod)
 - [ ] 로깅 설정 (Logback)
 - [ ] 통합 테스트 환경 구축
+
+---
+
+### 2025-11-21 - Lombok @RequiredArgsConstructor 적용으로 코드 간결화
+
+#### 완료 작업
+
+**Lombok @RequiredArgsConstructor 전면 적용**
+
+adapter-persistence, adapter-scraper, application 모듈의 모든 Adapter 및 Service 클래스에 `@RequiredArgsConstructor`를 적용하여 생성자 보일러플레이트 코드를 제거했습니다.
+
+**1. adapter-persistence 모듈**
+- UserMybatisAdapter
+- DividendMybatisAdapter
+- ETFMybatisAdapter
+
+**2. adapter-scraper 모듈**
+- ETFScraperAdapter
+
+참고: YahooFinanceClient는 생성자에서 WebClient.Builder를 설정하는 로직이 있어 @RequiredArgsConstructor 적용 대상에서 제외. GuggenheimScraper와 NEOSScraper는 의존성이 없어 적용 불필요.
+
+**3. application 모듈**
+- RiskAnalysisService
+- NotificationService
+- UserRegistrationService
+- PortfolioManagementService
+
+#### 적용 패턴
+
+Before:
+```java
+@Service
+@Transactional(readOnly = true)
+public class RiskAnalysisService implements AnalyzeRiskUseCase {
+    private final ETFDataPort etfDataPort;
+    private final UserRepository userRepository;
+    
+    public RiskAnalysisService(ETFDataPort etfDataPort, UserRepository userRepository) {
+        this.etfDataPort = etfDataPort;
+        this.userRepository = userRepository;
+    }
+}
+```
+
+After:
+```java
+@Service
+@Transactional(readOnly = true)
+@RequiredArgsConstructor
+public class RiskAnalysisService implements AnalyzeRiskUseCase {
+    private final ETFDataPort etfDataPort;
+    private final UserRepository userRepository;
+}
+```
+
+#### 빌드 검증
+
+- ./gradlew build -x test 성공
+- 모든 모듈 컴파일 성공
+- 23개 태스크 실행, BUILD SUCCESSFUL in 2s
+
+#### 개발 규칙 추가
+
+CLAUDE.md 개발 규칙에 다음 항목 추가:
+- 16. 의존성 주입은 Lombok @RequiredArgsConstructor를 사용하여 생성자 주입으로 처리한다 (final 필드로 선언된 의존성에 대해 자동으로 생성자 생성).
+
+#### 기술적 효과
+
+1. **코드 간결성**: 수동 생성자 제거로 약 100줄 이상의 보일러플레이트 코드 감소
+2. **가독성 향상**: 의존성이 final 필드 선언만으로 명확히 드러남
+3. **유지보수성**: 의존성 추가/제거 시 생성자 수정 불필요
+4. **일관성**: 프로젝트 전체에 동일한 의존성 주입 패턴 적용
+5. **타입 안전성**: final 필드로 불변성 보장
+
+#### 다음 단계
+
+Phase 3 Infrastructure 계층 구현 계속 진행:
+- adapter-telegram (텔레그램 봇) 구현
+- adapter-scheduler (배당 알림 스케줄러) 구현
+- adapter-web (REST API, 선택적) 구현
+- bootstrap 모듈 설정 완성
+
+---
+
+### 2025-11-21 (오후) - adapter-web (REST API) 구현 완료
+
+#### 완료 작업
+
+**1. 공통 응답 및 에러 처리 구조**
+
+ApiResponse<T> (com.etf.risk.adapter.web.common)
+- 표준 API 응답 구조
+- success/data/message/timestamp 포함
+- 제네릭 타입으로 유연한 응답 처리
+
+ErrorResponse (com.etf.risk.adapter.web.common)
+- 에러 응답 전용 구조
+- success=false 고정
+- message/errorCode/fieldErrors/timestamp 포함
+- Validation 에러 시 필드별 상세 정보 제공
+
+GlobalExceptionHandler (com.etf.risk.adapter.web.exception)
+- @RestControllerAdvice 기반 중앙 집중식 예외 처리
+- MethodArgumentNotValidException: Bean Validation 에러
+- IllegalArgumentException/IllegalStateException: 비즈니스 로직 에러
+- DomainException 계열: 도메인 예외 (DuplicatePositionException 등)
+- Exception: 예상치 못한 에러 (500 Internal Server Error)
+
+**2. User API (UserController)**
+
+엔드포인트:
+- POST /api/users/register - 사용자 등록
+- GET /api/users/chat/{chatId} - Chat ID로 사용자 조회
+- GET /api/users/chat/{chatId}/exists - 등록 여부 확인
+
+DTO:
+- RegisterUserRequest: telegramChatId, username (Validation 적용)
+- UserResponse: id, telegramChatId, telegramUsername, createdAt, updatedAt
+
+**3. Portfolio API (PortfolioController)**
+
+엔드포인트:
+- POST /api/portfolios/positions - 신규 포지션 추가
+- PUT /api/portfolios/users/{userId}/positions/{symbol}/add - 추가 매수
+- PUT /api/portfolios/users/{userId}/positions/{symbol}/reduce - 일부 매도
+- DELETE /api/portfolios/users/{userId}/positions/{symbol} - 전량 매도
+- GET /api/portfolios/users/{userId}/positions - 사용자 포트폴리오 조회
+- GET /api/portfolios/users/{userId}/positions/{symbol} - 특정 포지션 조회
+
+DTO:
+- AddPositionRequest: userId, symbol, quantity, averagePrice
+- UpdatePositionRequest: quantity, price (추가 매수용)
+- ReducePositionRequest: quantity (매도용)
+- PositionResponse: id, symbol, quantity, averagePrice, createdAt, updatedAt
+
+**4. Risk Analysis API (RiskController)**
+
+엔드포인트:
+- GET /api/risk/etf/{symbol} - ETF 리스크 분석
+- GET /api/risk/portfolio/{userId} - 사용자 포트폴리오 리스크 분석
+
+DTO:
+- RiskMetricsResponse: target, overallRiskLevel, overallRiskDescription, riskFactors[], requiresAction, stable
+- RiskFactorResponse: category, level, message (nested class)
+
+#### 디렉토리 구조
+
+```
+infrastructure/adapter-web/src/main/java/com/etf/risk/adapter/web/
+├── common/
+│   ├── ApiResponse.java
+│   └── ErrorResponse.java
+├── exception/
+│   └── GlobalExceptionHandler.java
+├── dto/
+│   ├── user/
+│   │   ├── RegisterUserRequest.java
+│   │   └── UserResponse.java
+│   ├── portfolio/
+│   │   ├── AddPositionRequest.java
+│   │   ├── UpdatePositionRequest.java
+│   │   ├── ReducePositionRequest.java
+│   │   └── PositionResponse.java
+│   └── risk/
+│       └── RiskMetricsResponse.java
+└── controller/
+    ├── UserController.java
+    ├── PortfolioController.java
+    └── RiskController.java
+```
+
+#### 설계 특징
+
+**1. RESTful API 설계**
+- 명확한 리소스 구조 (/api/users, /api/portfolios, /api/risk)
+- HTTP 메서드 적절히 활용 (POST, GET, PUT, DELETE)
+- 상태 코드 활용 (201 Created, 400 Bad Request, 500 Internal Server Error)
+
+**2. 일관된 응답 구조**
+- 성공: ApiResponse<T> { success: true, data: T, message?, timestamp }
+- 실패: ErrorResponse { success: false, message, errorCode?, fieldErrors?, timestamp }
+
+**3. Bean Validation 활용**
+- @NotNull, @NotBlank, @Positive 등 선언적 검증
+- GlobalExceptionHandler에서 중앙 처리
+- 필드별 상세 에러 메시지 제공
+
+**4. Lombok 활용**
+- @RequiredArgsConstructor로 Controller 의존성 주입
+- @Getter로 DTO 필드 접근자 자동 생성
+- @NoArgsConstructor로 역직렬화 지원 (Jackson)
+
+**5. DTO 변환 패턴**
+- Response DTO에 static from(Domain) 팩토리 메서드
+- 도메인 모델 → DTO 단방향 변환
+- 명시적 변환으로 가독성 향상
+
+#### 빌드 검증
+
+- ./gradlew :infrastructure:adapter-web:build -x test 성공
+- ./gradlew build -x test 성공 (전체 프로젝트)
+- BUILD SUCCESSFUL in 1s
+
+#### API 설계 예시
+
+**사용자 등록**
+```http
+POST /api/users/register
+Content-Type: application/json
+
+{
+  "telegramChatId": 123456789,
+  "username": "john_doe"
+}
+
+Response 201 Created:
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "telegramChatId": 123456789,
+    "telegramUsername": "john_doe",
+    "createdAt": "2025-11-21T14:30:00",
+    "updatedAt": "2025-11-21T14:30:00"
+  },
+  "message": "사용자 등록이 완료되었습니다",
+  "timestamp": "2025-11-21T14:30:00"
+}
+```
+
+**포지션 추가**
+```http
+POST /api/portfolios/positions
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "symbol": "GOF",
+  "quantity": 100,
+  "averagePrice": 20.50
+}
+
+Response 201 Created:
+{
+  "success": true,
+  "data": null,
+  "message": "포지션이 추가되었습니다",
+  "timestamp": "2025-11-21T14:35:00"
+}
+```
+
+**ETF 리스크 분석**
+```http
+GET /api/risk/etf/GOF
+
+Response 200 OK:
+{
+  "success": true,
+  "data": {
+    "target": "GOF",
+    "overallRiskLevel": "MEDIUM",
+    "overallRiskDescription": "주의 필요",
+    "riskFactors": [
+      {
+        "category": "프리미엄/할인",
+        "level": "LOW",
+        "message": "프리미엄 5.2% - 안정 구간"
+      },
+      {
+        "category": "ROC",
+        "level": "MEDIUM",
+        "message": "ROC 54.8% - NAV 잠식 주의"
+      }
+    ],
+    "requiresAction": false,
+    "stable": false
+  },
+  "timestamp": "2025-11-21T14:40:00"
+}
+```
+
+**Validation 에러 예시**
+```http
+POST /api/portfolios/positions
+Content-Type: application/json
+
+{
+  "userId": -1,
+  "symbol": "",
+  "quantity": 0
+}
+
+Response 400 Bad Request:
+{
+  "success": false,
+  "message": "입력값 검증에 실패했습니다",
+  "errorCode": "VALIDATION_ERROR",
+  "fieldErrors": [
+    {
+      "field": "userId",
+      "message": "사용자 ID는 양수여야 합니다"
+    },
+    {
+      "field": "symbol",
+      "message": "ETF 심볼은 필수입니다"
+    },
+    {
+      "field": "quantity",
+      "message": "수량은 양수여야 합니다"
+    }
+  ],
+  "timestamp": "2025-11-21T14:45:00"
+}
+```
+
+#### 기술적 성과
+
+1. **RESTful API 표준 준수**: 명확한 리소스 구조와 HTTP 메서드 활용
+2. **중앙 집중식 에러 처리**: GlobalExceptionHandler로 일관된 에러 응답
+3. **선언적 검증**: Bean Validation으로 비즈니스 규칙 명시
+4. **타입 안전성**: 제네릭 ApiResponse로 컴파일 타임 타입 체크
+5. **확장 가능한 구조**: 새로운 API 추가 시 패턴 재사용 가능
+
+#### 다음 단계
+
+Phase 3 Infrastructure 계층 구현 계속 진행:
+- adapter-telegram (텔레그램 봇) 구현
+- adapter-scheduler (배당 알림 스케줄러) 구현
+- bootstrap 모듈 설정 완성 및 통합 테스트
+
+#### 참고사항
+
+**향후 추가 고려사항:**
+- OpenAPI 3.0 문서화 (Springdoc)
+- API 버저닝 (/api/v1/...)
+- 페이지네이션 (포트폴리오 조회 등)
+- CORS 설정 (웹 프론트엔드 연동 시)
+- Rate Limiting (API 남용 방지)
+- JWT 인증/인가 (보안 강화)
 
 ---

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.etf.risk.adapter.persistence.mapper.DividendMapper">
+
+    <insert id="insertDividend" parameterType="DividendVO" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dividend_history (etf_symbol, ex_dividend_date, payment_date, amount_per_share, roc_percentage, created_at)
+        VALUES (#{etfSymbol}, #{exDividendDate}, #{paymentDate}, #{amountPerShare}, #{rocPercentage}, #{createdAt})
+        ON CONFLICT (etf_symbol, payment_date) DO NOTHING
+    </insert>
+
+    <select id="selectLatestBySymbol" resultType="DividendVO">
+        SELECT id, etf_symbol, ex_dividend_date, payment_date, amount_per_share, roc_percentage, created_at
+        FROM dividend_history
+        WHERE etf_symbol = #{etfSymbol}
+        ORDER BY payment_date DESC
+            LIMIT 1
+    </select>
+
+    <select id="selectBySymbolAndDateRange" resultType="DividendVO">
+        SELECT id, etf_symbol, ex_dividend_date, payment_date, amount_per_share, roc_percentage, created_at
+        FROM dividend_history
+        WHERE etf_symbol = #{etfSymbol}
+          AND payment_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY payment_date DESC
+    </select>
+
+    <select id="selectByPaymentDate" resultType="DividendVO">
+        SELECT id, etf_symbol, ex_dividend_date, payment_date, amount_per_share, roc_percentage, created_at
+        FROM dividend_history
+        WHERE payment_date = #{paymentDate}
+        ORDER BY etf_symbol
+    </select>
+
+</mapper>
