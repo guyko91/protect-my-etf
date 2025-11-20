@@ -13,7 +13,7 @@ public class Money {
         if (amount == null) {
             throw new IllegalArgumentException("금액은 null일 수 없습니다.");
         }
-        this.amount = amount.setScale(2, RoundingMode.HALF_UP);
+        this.amount = amount.setScale(4, RoundingMode.HALF_UP);
     }
 
     public static Money of(BigDecimal amount) {
@@ -55,7 +55,7 @@ public class Money {
         if (divisor.compareTo(BigDecimal.ZERO) == 0) {
             throw new ArithmeticException("0으로 나눌 수 없습니다.");
         }
-        return new Money(this.amount.divide(divisor, 2, RoundingMode.HALF_UP));
+        return new Money(this.amount.divide(divisor, 4, RoundingMode.HALF_UP));
     }
 
     public boolean isZero() {
@@ -68,6 +68,22 @@ public class Money {
 
     public boolean isNegative() {
         return amount.compareTo(BigDecimal.ZERO) < 0;
+    }
+
+    public boolean isGreaterThan(Money other) {
+        return amount.compareTo(other.amount) > 0;
+    }
+
+    public boolean isLessThan(Money other) {
+        return amount.compareTo(other.amount) < 0;
+    }
+
+    public boolean isGreaterThanOrEqual(Money other) {
+        return amount.compareTo(other.amount) >= 0;
+    }
+
+    public boolean isLessThanOrEqual(Money other) {
+        return amount.compareTo(other.amount) <= 0;
     }
 
     public BigDecimal getAmount() {

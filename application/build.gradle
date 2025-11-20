@@ -15,10 +15,8 @@ dependencies {
     // Validation
     implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
 
-    // Test
-    testImplementation 'org.junit.jupiter:junit-jupiter'
+    // Test (공통 테스트 의존성은 루트 build.gradle에서 관리)
     testImplementation 'org.springframework:spring-test'
-    testImplementation 'org.assertj:assertj-core:3.24.2'
 }
 
 dependencyManagement {

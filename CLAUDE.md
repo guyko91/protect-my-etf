@@ -899,3 +899,657 @@ domain/src/main/java/com/etf/risk/domain/
 ### 확장성
 - 새로운 ETF 추가 시 최소한의 코드 수정
 - 알림 채널 확장 가능성 (이메일, 슬랙 등)
+
+---
+
+### 2025-11-20 (오후 2차) - Phase 2 도메인 모델 구현 완료
+
+#### 완료 작업
+
+**1. 핵심 도메인 모델 구현**
+
+User 엔티티 (domain/src/main/java/com/etf/risk/domain/model/user/User.java)
+- User-Portfolio 1:1 컴포지션 관계
+- 사용자별 포트폴리오 관리 기능
+- 팩토리 메서드: register(), reconstitute()
+- 포지션 관리 위임: addPosition(), addToPosition(), reducePosition(), removePosition()
+
+ETF 타입 시스템 (domain/src/main/java/com/etf/risk/domain/model/etf/ETFType.java)
+- 13가지 ETF 유형 정의 (지수형, 섹터형, 테마형, 채권형, 원자재, 리츠, 레버리지형, 인버스형, 배당형, 글로벌, 스마트베타, CEF, 커버드콜)
+- 하나의 ETF가 여러 타입에 속할 수 있도록 설계
+- ETF 클래스는 Set<ETFType>으로 타입 관리
+- 메타데이터 용도 (유형별 리스크 전략이 아닌 ETF별 고유 전략)
+
+ETF 추상 클래스 (domain/src/main/java/com/etf/risk/domain/model/etf/ETF.java)
+- 템플릿 메서드: analyzeRisk() (추상 메서드, 각 ETF가 구현)
+- 공통 기능: calculateYield(), updateSnapshot()
+- 다형성 활용으로 OCP 준수
+
+GOF 도메인 모델 (domain/src/main/java/com/etf/risk/domain/model/etf/GOF.java)
+- 타입: CEF + 레버리지형 + 배당형
+- 리스크 분석 요소:
+  1. 프리미엄/할인율: >15% (HIGH), 10~15% (MEDIUM), <10% (LOW)
+  2. 레버리지: 증가(MEDIUM), 감소/안정(LOW)
+  3. ROC: >50% (CRITICAL), 30~50% (MEDIUM), <30% (LOW)
+  4. 배당 지속성 체크
+- analyzeRisk() 메서드로 종합 리스크 분석
+
+QQQI 도메인 모델 (domain/src/main/java/com/etf/risk/domain/model/etf/QQQI.java)
+- 타입: 커버드콜 + 배당형 + 지수형
+- 리스크 분석 요소:
+  1. ROC: >60% (HIGH), 40~60% (MEDIUM), <40% (LOW)
+  2. 나스닥100 추세: 하락(MEDIUM), 보합/상승(LOW)
+  3. 배당 지속성 체크
+- analyzeRisk() 메서드로 종합 리스크 분석
+
+**2. 리스크 분석 모델**
+
+RiskLevel enum (domain/src/main/java/com/etf/risk/domain/model/risk/RiskLevel.java)
+- LOW, MEDIUM, HIGH, CRITICAL 4단계
+- 비교 메서드: isHigherThan(), isLowerThan(), max()
+
+RiskMetrics 클래스 (domain/src/main/java/com/etf/risk/domain/model/risk/RiskMetrics.java)
+- Builder 패턴으로 여러 RiskFactor 수집
+- RiskFactor: Record(category, level, message)
+- overallRiskLevel: 모든 요소 중 최고 레벨로 결정
+- requiresAction(), isStable() 편의 메서드
+
+**3. 시계열 데이터 모델**
+
+ETFSnapshot Record (domain/src/main/java/com/etf/risk/domain/model/etf/ETFSnapshot.java)
+- 특정 시점의 ETF 스냅샷 (symbol, currentPrice, nav, recordedDate)
+- 프리미엄/할인 계산: calculatePremiumOrDiscount()
+- 거래 상태 확인: isTradingAtPremium(), isTradingAtDiscount()
+
+**4. 배당 모델**
+
+Dividend 클래스 (domain/src/main/java/com/etf/risk/domain/model/dividend/Dividend.java)
+- 배당 정보: etfSymbol, exDividendDate, paymentDate, amountPerShare, rocPercentage
+- 검증 로직: 날짜 순서, 금액 양수
+- 배당 계산: calculateTotalDividend(quantity)
+
+**5. 알림 모델**
+
+NotificationMessage 클래스 (domain/src/main/java/com/etf/risk/domain/model/notification/NotificationMessage.java)
+- 알림 정보: chatId, title, content, priority, createdAt
+- Telegram 포맷: formatForTelegram() (Markdown 형식)
+- 우선순위 체크: isHighPriority()
+
+NotificationPriority enum
+- LOW, NORMAL, HIGH, URGENT 4단계
+
+**6. Port 인터페이스 정의 (Hexagonal Architecture)**
+
+Inbound Port (domain/src/main/java/com/etf/risk/domain/port/in/)
+- AnalyzeRiskUseCase: ETF 리스크 분석, 사용자 포트폴리오 리스크 분석
+- SendNotificationUseCase: 알림 전송, 배당 알림, 리스크 알림
+- RegisterUserUseCase: 사용자 등록, 조회
+- ManagePortfolioUseCase: 포지션 추가/수정/삭제, 조회
+
+Outbound Port (domain/src/main/java/com/etf/risk/domain/port/out/)
+- ETFDataPort: ETF 조회, 스냅샷 저장/조회
+- UserRepository: 사용자 저장/조회, ETF 보유자 조회
+- DividendRepository: 배당 저장/조회, 날짜별 조회
+- NotificationPort: 알림 전송, 가용성 체크
+
+**7. Money 클래스 확장**
+
+비교 메서드 추가 (domain/src/main/java/com/etf/risk/domain/model/common/Money.java)
+- isGreaterThan(), isLessThan()
+- isGreaterThanOrEqual(), isLessThanOrEqual()
+- ETFSnapshot에서 프리미엄/할인 판단에 활용
+
+**8. 빌드 설정 수정**
+
+domain/build.gradle
+- Lombok 의존성 제거 (Java 21 Record 활용으로 불필요)
+- 테스트 의존성만 유지 (JUnit, AssertJ)
+- 빌드 성공 확인 (./gradlew :domain:build -x test)
+
+#### 도메인 모델 구조
+
+```
+domain/src/main/java/com/etf/risk/domain/
+├── model/
+│   ├── common/
+│   │   └── Money.java (비교 메서드 추가)
+│   ├── etf/
+│   │   ├── ETF.java (추상 클래스, Set<ETFType>)
+│   │   ├── ETFType.java (enum, 13가지 유형)
+│   │   ├── ETFSnapshot.java (Record)
+│   │   ├── GOF.java (CEF + 레버리지 + 배당)
+│   │   ├── QQQI.java (커버드콜 + 배당 + 지수)
+│   │   ├── Premium.java (Record)
+│   │   ├── ROC.java (Record)
+│   │   └── Leverage.java (Record)
+│   ├── user/
+│   │   ├── User.java
+│   │   └── TelegramChatId.java (Record)
+│   ├── portfolio/
+│   │   ├── Portfolio.java
+│   │   └── Position.java
+│   ├── risk/
+│   │   ├── RiskLevel.java (enum)
+│   │   └── RiskMetrics.java (Builder 패턴)
+│   ├── dividend/
+│   │   └── Dividend.java
+│   └── notification/
+│       ├── NotificationMessage.java
+│       └── NotificationPriority.java (enum)
+├── port/
+│   ├── in/
+│   │   ├── AnalyzeRiskUseCase.java
+│   │   ├── SendNotificationUseCase.java
+│   │   ├── RegisterUserUseCase.java
+│   │   └── ManagePortfolioUseCase.java
+│   └── out/
+│       ├── ETFDataPort.java
+│       ├── UserRepository.java
+│       ├── DividendRepository.java
+│       └── NotificationPort.java
+└── exception/
+    ├── DomainException.java
+    ├── DuplicatePositionException.java
+    ├── PositionNotFoundException.java
+    ├── InvalidQuantityException.java
+    └── InsufficientQuantityException.java
+```
+
+#### 주요 설계 결정사항
+
+1. ETF 타입 시스템
+   - 하나의 ETF가 여러 유형에 속할 수 있도록 Set<ETFType> 사용
+   - 메타데이터 목적 (분류/표시)
+   - 리스크 분석은 각 ETF 클래스에서 고유 로직 구현
+
+2. 리스크 분석 전략
+   - Template Method 패턴: ETF.analyzeRisk() 추상 메서드
+   - GOF, QQQI가 각자의 리스크 분석 로직 구현
+   - RiskMetrics Builder로 다양한 RiskFactor 수집
+
+3. Java 21 활용
+   - Record: Value Objects 간결화 (Premium, ROC, Leverage, ETFSnapshot 등)
+   - Lombok 불필요 (equals, hashCode, toString 자동 생성)
+   - 불변성 보장
+
+4. Hexagonal Architecture
+   - Port 인터페이스를 domain 모듈에 배치
+   - Inbound Port: Use Case 정의
+   - Outbound Port: 인프라 의존성 추상화
+
+#### Phase 2 완료 상태
+
+- [x] User 도메인 모델 구현
+- [x] ETF 추상 클래스 구현
+- [x] GOF, QQQI 도메인 모델 구현 (리스크 분석 로직 포함)
+- [x] ETFSnapshot 구현 (시계열 데이터)
+- [x] RiskMetrics, RiskLevel 구현
+- [x] Dividend 도메인 모델 구현
+- [x] NotificationMessage 구현
+- [x] Port 인터페이스 정의 (Inbound/Outbound)
+- [x] 도메인 모듈 빌드 성공
+- [ ] 도메인 모델 단위 테스트 작성 (BDD 스타일) - 다음 단계
+
+#### 다음 단계 (Phase 3: 웹 스크래핑 구현 전 준비)
+
+**테스트 작성 (선택적, 필요시)**
+- Position 엔티티 단위 테스트
+- Portfolio 엔티티 단위 테스트
+- GOF, QQQI 리스크 분석 로직 테스트
+- RiskMetrics Builder 테스트
+
+**Application 계층 구현**
+- RiskAnalysisService (AnalyzeRiskUseCase 구현)
+- NotificationService (SendNotificationUseCase 구현)
+- UserRegistrationService (RegisterUserUseCase 구현)
+- PortfolioManagementService (ManagePortfolioUseCase 구현)
+
+**Infrastructure 계층 구현**
+- adapter-persistence: MyBatis Mapper 작성
+- adapter-scraper: 웹 스크래핑 구현 (Guggenheim, NEOS, Yahoo Finance API)
+- adapter-telegram: 텔레그램 봇 구현
+- adapter-scheduler: 배당 알림 스케줄러 구현
+
+#### 기술적 성과
+
+1. 순수 도메인 모델 완성 (외부 의존성 없음)
+2. Java 21 Record로 간결한 Value Objects
+3. Template Method 패턴으로 확장 가능한 ETF 리스크 분석
+4. Builder 패턴으로 유연한 RiskMetrics 생성
+5. Hexagonal Architecture의 Port 인터페이스 정의 완료
+
+---
+
+### 2025-11-20 (오후 3차) - Application 계층 구현 완료
+
+#### 완료 작업
+
+**빌드 설정 개선**
+
+루트 build.gradle 수정
+- subprojects 블록에 공통 테스트 의존성 추가
+- 모든 모듈에서 중복 제거로 중앙 관리
+
+```gradle
+subprojects {
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testImplementation 'org.assertj:assertj-core:3.24.2'
+    }
+}
+```
+
+**Application 계층 서비스 구현**
+
+1. RiskAnalysisService (application/src/main/java/com/etf/risk/application/service/RiskAnalysisService.java)
+   - AnalyzeRiskUseCase 구현
+   - analyzeETFRisk(): ETF 단일 리스크 분석
+   - analyzeUserPortfolioRisk(): 사용자 전체 포트폴리오 리스크 분석
+   - ETFDataPort, UserRepository 의존
+   - @Transactional(readOnly = true) 적용
+
+2. NotificationService (application/src/main/java/com/etf/risk/application/service/NotificationService.java)
+   - SendNotificationUseCase 구현
+   - sendNotification(): 알림 전송
+   - sendDividendNotification(): 배당 알림 (보유 수량, 예상 배당금 계산)
+   - sendRiskAlert(): 리스크 알림 (상세 분석 결과 포맷팅)
+   - NotificationPort, UserRepository, DividendRepository, AnalyzeRiskUseCase 의존
+   - RiskLevel에 따른 NotificationPriority 자동 결정
+   - Java 21 Switch Expression 활용
+
+3. UserRegistrationService (application/src/main/java/com/etf/risk/application/service/UserRegistrationService.java)
+   - RegisterUserUseCase 구현
+   - registerUser(): 사용자 등록 (중복 방지)
+   - findUserByChatId(): TelegramChatId로 사용자 조회
+   - isUserRegistered(): 등록 여부 확인
+   - UserRepository 의존
+   - @Transactional 적용 (등록 시에만 쓰기)
+
+4. PortfolioManagementService (application/src/main/java/com/etf/risk/application/service/PortfolioManagementService.java)
+   - ManagePortfolioUseCase 구현
+   - addPosition(): 신규 포지션 추가
+   - addToPosition(): 기존 포지션 추가 매수
+   - reducePosition(): 일부 매도
+   - removePosition(): 전량 매도
+   - getUserPositions(): 사용자 포트폴리오 조회
+   - getUserPosition(): 특정 ETF 포지션 조회
+   - UserRepository 의존
+   - 도메인 모델에 위임 (User 엔티티의 메서드 호출)
+
+#### Application 계층 구조
+
+```
+application/src/main/java/com/etf/risk/application/
+└── service/
+    ├── RiskAnalysisService.java
+    ├── NotificationService.java
+    ├── UserRegistrationService.java
+    └── PortfolioManagementService.java
+```
+
+#### 주요 설계 결정사항
+
+1. 트랜잭션 관리
+   - 조회 전용: @Transactional(readOnly = true)
+   - 쓰기 작업: @Transactional (메서드 레벨)
+   - Spring 트랜잭션 관리 활용
+
+2. 도메인 로직 위임
+   - Application 계층은 도메인 모델 조율만 담당
+   - 비즈니스 로직은 도메인 모델에 위임 (예: User.addPosition())
+   - Thin Application Layer
+
+3. 의존성 주입
+   - 생성자 주입 방식 (불변성 보장)
+   - Port 인터페이스에 의존 (Hexagonal Architecture)
+
+4. 알림 메시지 포맷팅
+   - 배당 알림: 보유 수량, 예상 배당금, ROC 정보 포함
+   - 리스크 알림: 종합 레벨, 상세 요소별 분석 결과
+   - Markdown 형식 지원 (Telegram)
+
+5. 예외 처리
+   - IllegalArgumentException: 엔티티 조회 실패
+   - IllegalStateException: 비즈니스 규칙 위반
+   - 명확한 에러 메시지
+
+#### 빌드 검증
+
+- ./gradlew :application:build -x test 성공
+- 모든 서비스 컴파일 성공
+- Port 인터페이스 구현 완료
+
+#### 다음 단계 (Infrastructure 계층 구현)
+
+**adapter-persistence (MyBatis)**
+- UserMapper, DividendMapper 인터페이스
+- XML Mapper 파일 작성
+- Repository 구현체 (UserRepositoryImpl 등)
+- DB DTO 작성
+
+**adapter-scraper (웹 스크래핑)**
+- Guggenheim 스크래퍼 (GOF 데이터)
+- NEOS 스크래퍼 (QQQI 데이터)
+- Yahoo Finance API 연동 (시세 데이터)
+- ETFDataPort 구현체
+
+**adapter-telegram (텔레그램 봇)**
+- TelegramBot 구현
+- 명령어 핸들러 (/start, /register, /portfolio 등)
+- NotificationPort 구현체
+
+**adapter-scheduler (스케줄러)**
+- 배당일 기준 스케줄러
+- 리스크 분석 자동 실행
+- 알림 전송 통합
+
+#### 기술적 성과
+
+1. Hexagonal Architecture의 Application 계층 완성
+2. Port 인터페이스 구현으로 도메인과 인프라 분리
+3. Spring 트랜잭션 관리 적용
+4. 도메인 로직 위임으로 Thin Application Layer 구현
+5. Java 21 Switch Expression 활용
+
+---
+
+### 2025-11-20 (오후 4차) - 도메인 테스트 코드 작성
+
+#### 완료 작업
+
+**1. 실질적인 도메인 로직 테스트 작성 (BDD 스타일)**
+
+Position 엔티티 테스트 (PositionTest.java) - 17개 테스트
+- 초기 포지션 생성
+- 추가 매수 시 평단가 가중평균 재계산 검증
+- 다양한 시나리오의 평단가 계산 (GOF 5+15주, QQQI 100+50주)
+- 일부 매도 시 수량 감소, 평단가 유지
+- 전량 매도 시 수량 0
+- 보유 수량 초과 매도 예외 처리
+- 0 이하 수량 매도 예외 처리
+- 현재 가치 계산 (수량 × 현재가)
+- 손익률 계산 (수익/손실 상황)
+- 손절 기준 판단 (-15%, -20%)
+- 예상 배당금 계산
+- **실제 GOF 투자 시나리오**: 분할 매수(3회) 후 일부 매도
+- **실제 QQQI 투자 시나리오**: 고배당 ETF 월배당/연배당 계산
+
+Portfolio 엔티티 테스트 (PortfolioTest.java) - 15개 테스트
+- 빈 포트폴리오 생성
+- 포지션 추가/제거
+- 중복 포지션 예외 처리
+- 기존 포지션 추가 매수 (평단가 재계산 위임)
+- 일부/전량 매도
+- 포트폴리오 총 가치 계산
+- 포지션 비중 계산 (단일/복수 종목)
+- **실제 포트폴리오 시나리오 1**: GOF/QQQI 50:50 리밸런싱 목표
+- **실제 포트폴리오 시나리오 2**: 손절 기준 도달 시나리오
+- **실제 포트폴리오 시나리오 3**: 복잡한 거래 이력 (매수/매도 반복)
+
+GOF 리스크 분석 테스트 (GOFTest.java) - 14개 테스트
+- GOF 생성 및 기본 속성
+- 모든 지표 안정적인 경우 (LOW)
+- 프리미엄 주의 구간 (10~15%, MEDIUM)
+- 프리미엄 위험 구간 (>15%, HIGH, 신규 매수 금지)
+- 레버리지 증가 시 리스크 상승 (MEDIUM)
+- ROC 주의 구간 (30~50%, MEDIUM)
+- ROC 위험 구간 (>50%, CRITICAL, NAV 잠식)
+- 복합 위험 상황 (프리미엄+레버리지+ROC, CRITICAL)
+- **실제 시나리오 1**: 2024년 GOF 상태 (ROC 54.84%)
+- **실제 시나리오 2**: 이상적인 GOF 투자 시점
+- 연 배당 수익률 계산 (월 $0.1821 × 12)
+- ETFSnapshot 업데이트
+- Premium/ROC/Leverage 업데이트 및 리스크 재분석
+
+QQQI 리스크 분석 테스트 (QQQITest.java) - 16개 테스트
+- QQQI 생성 및 기본 속성
+- 모든 지표 안정적인 경우 (LOW)
+- ROC 주의 구간 (40~60%, MEDIUM)
+- ROC 위험 구간 (>60%, HIGH, 구조 확인 필요)
+- 나스닥 하락 시 옵션 수익 감소 우려 (MEDIUM)
+- 나스닥 보합/상승 시 안정 (LOW)
+- 복합 위험 (ROC 높음 + 나스닥 하락, HIGH)
+- **실제 시나리오 1**: 2025년 QQQI 상태 (ROC 100%)
+- **실제 시나리오 2**: 이상적인 QQQI 투자 시점
+- **실제 시나리오 3**: 나스닥 조정장에서의 QQQI
+- 연 배당 수익률 계산 (월 $0.6445 × 12)
+- QQQI 월배당 계산 (100주 기준)
+- ROC/나스닥추세 업데이트 및 리스크 재분석
+- 커버드콜 전략 특성 이해 (ROC 100%도 정상일 수 있음)
+
+**2. 빌드 설정 수정**
+
+루트 build.gradle
+- JUnit 5 버전 명시: `org.junit.jupiter:junit-jupiter:5.10.1`
+- JUnit Platform Launcher 추가: `testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.1'`
+
+#### 테스트 구조
+
+```
+domain/src/test/java/com/etf/risk/domain/
+├── model/
+│   ├── portfolio/
+│   │   ├── PositionTest.java (17 tests)
+│   │   └── PortfolioTest.java (15 tests)
+│   └── etf/
+│       ├── GOFTest.java (14 tests)
+│       └── QQQITest.java (16 tests)
+```
+
+총 62개 테스트 작성, 57개 통과, 5개 실패 (Money 계산 정확도 문제)
+
+#### 주요 테스트 특징
+
+1. **실제 투자 시나리오 반영**
+   - GOF: 분할 매수 3회, 평단가 $21.09 계산
+   - QQQI: 200주 보유, 월 배당 $128.90, 연 배당 수익률 14.26%
+   - 포트폴리오: GOF/QQQI 50:50 리밸런싱 목표
+
+2. **손절 기준 검증**
+   - -15% 손실: 경고 구간
+   - -20% 손실: 권장 구간
+   - 실제 손익률 계산 정확도 검증
+
+3. **리스크 레벨 판단 로직**
+   - GOF: 프리미엄 15%, 레버리지 증가, ROC 50% 임계값
+   - QQQI: ROC 60%, 나스닥 추세 영향
+   - 복합 위험 시 최고 레벨 선택
+
+4. **2024~2025년 실제 데이터 기반**
+   - GOF ROC 54.84% (CRITICAL)
+   - QQQI ROC 100% (HIGH, 커버드콜 전략상 정상 가능)
+   - 실제 배당금 ($0.1821, $0.6445) 사용
+
+5. **BDD 스타일 (Given-When-Then)**
+   - Given: 초기 상태 설정
+   - When: 행위 실행
+   - Then: 결과 검증
+
+#### 발견된 이슈 (다음 세션 해결 필요)
+
+**5개 테스트 실패 - Money 계산 정확도 문제**
+1. Position: 예상 배당금 계산
+2. Position: 실제 GOF 투자 시나리오
+3. Position: 실제 QQQI 투자 시나리오
+4. GOF: 연 배당 수익률 계산
+5. QQQI: 연 배당 수익률 계산 / 월배당 계산
+
+**원인 추정:**
+- Money.multiply(int) 반환 타입 또는 정확도
+- BigDecimal 연산 시 scale/rounding 문제
+- 테스트 기대값과 실제 계산값의 미세한 차이
+
+**해결 방안:**
+- Money 클래스의 multiply 메서드 반환 타입 확인
+- BigDecimal scale 및 rounding mode 재검토
+- 테스트 기대값 재계산 및 조정
+
+#### 다음 단계
+
+**1. 테스트 실패 수정**
+- Money 클래스 multiply 메서드 검토
+- 실패한 5개 테스트 수정
+- 전체 테스트 통과 확인
+
+**2. Infrastructure 계층 구현**
+- adapter-persistence: MyBatis Mapper 작성
+- adapter-scraper: 웹 스크래핑 구현
+- adapter-telegram: 텔레그램 봇 구현
+- adapter-scheduler: 배당 알림 스케줄러 구현
+
+#### 기술적 성과
+
+1. **62개의 실질적인 도메인 로직 테스트 작성**
+2. **실제 투자 시나리오 기반 테스트** (GOF/QQQI 실제 데이터)
+3. **BDD 스타일 테스트로 가독성 향상**
+4. **비즈니스 규칙 명확화** (손절 기준, 리스크 임계값)
+5. **회귀 방지** (도메인 로직 변경 시 즉시 감지)
+
+---
+
+### 2025-11-20 (오후 5차) - 도메인 테스트 수정 완료
+
+#### 문제 진단 및 해결
+
+**문제 원인**
+- Money 클래스가 소수점 2자리로 고정되어 배당금($0.1821 등)을 정확히 표현할 수 없었음
+- `Money.of("0.1821")`이 `$0.18`로 반올림되어 `0.18 × 100 = $18.00`으로 계산됨
+- 실제 기대값은 `0.1821 × 100 = $18.21`
+
+**해결 방안**
+1. **Money 클래스 precision 변경**: 소수점 2자리 → 4자리
+   - 생성자: `amount.setScale(2, HALF_UP)` → `amount.setScale(4, HALF_UP)`
+   - divide 메서드: scale 2 → 4
+
+2. **테스트 기대값 정확도 조정**
+   - 평단가 계산 시 정확한 4자리 값으로 수정
+   - 예: `Money.of("20.23")` → `Money.of("20.225")`
+   - 예: `Money.of("21.09")` → `Money.of("21.11")` (재계산 결과)
+
+#### 수정 내역
+
+**Money 클래스 (domain/src/main/java/com/etf/risk/domain/model/common/Money.java)**
+```java
+// Before
+this.amount = amount.setScale(2, RoundingMode.HALF_UP);
+
+// After
+this.amount = amount.setScale(4, RoundingMode.HALF_UP);
+```
+
+**테스트 코드 수정**
+1. PositionTest
+   - Line 56: `Money.of("20.23")` → `Money.of("20.225")`
+   - Line 212: `Money.of("21.09")` → `Money.of("21.11")` (재계산: 2111/100)
+   - Line 219: 수익률 11.43% → 11.32% (평단가 변경으로 재계산)
+   - Line 226: `Money.of("21.09")` → `Money.of("21.11")`
+
+2. PortfolioTest
+   - Line 75: `Money.of("21.33")` → `Money.of("21.3333")` (320/15)
+   - Line 303: `Money.of("20.44")` → `Money.of("20.4375")` (1635/80)
+   - Line 307: `Money.of("54.60")` → `Money.of("54.6")`
+
+#### 테스트 결과
+
+**최종 결과: 전체 테스트 통과 ✅**
+- BUILD SUCCESSFUL
+- 62개 테스트 모두 통과
+- Position, Portfolio, GOF, QQQI 모든 테스트 성공
+
+#### 기술적 의의
+
+1. **정확한 금융 계산**
+   - 배당금($0.1821)을 손실 없이 표현 가능
+   - 평단가 계산의 정확도 향상
+   - BigDecimal 4자리 precision으로 충분
+
+2. **도메인 모델 완성도**
+   - Money 클래스가 실제 금융 데이터 요구사항 충족
+   - 테스트를 통한 비즈니스 로직 검증 완료
+   - 실제 투자 시나리오 재현 가능
+
+3. **다음 단계 준비 완료**
+   - 도메인 계층 100% 완성
+   - Application 계층 완성
+   - Infrastructure 계층 구현 준비 완료
+
+#### Phase 2 완료 요약
+
+**도메인 계층 (100% 완료)**
+- ✅ Value Objects: Money, Premium, ROC, Leverage, TelegramChatId (Java 21 Record)
+- ✅ 도메인 예외 4개
+- ✅ 엔티티: User, Portfolio, Position
+- ✅ ETF 계층: ETF 추상 클래스, GOF, QQQI (리스크 분석 로직 완성)
+- ✅ 리스크 모델: RiskLevel, RiskMetrics (Builder 패턴)
+- ✅ 기타: Dividend, NotificationMessage, ETFSnapshot
+- ✅ Port 인터페이스: Inbound 4개, Outbound 4개
+- ✅ 단위 테스트: 62개 (Position 17, Portfolio 15, GOF 14, QQQI 16)
+
+**Application 계층 (100% 완료)**
+- ✅ RiskAnalysisService (AnalyzeRiskUseCase 구현)
+- ✅ NotificationService (SendNotificationUseCase 구현)
+- ✅ UserRegistrationService (RegisterUserUseCase 구현)
+- ✅ PortfolioManagementService (ManagePortfolioUseCase 구현)
+- ✅ Spring @Transactional 적용
+- ✅ 빌드 성공 확인
+
+**설계 패턴 적용**
+- Template Method: ETF.analyzeRisk()
+- Builder: RiskMetrics
+- Factory Method: Position.create(), Portfolio.createEmpty(), User.register()
+- Value Object: Money 외 5개
+- Rich Domain Model: 비즈니스 로직 도메인에 집중
+
+**기술 스택 활용**
+- Java 21 Record (6개 클래스)
+- Java 21 Switch Expression (NotificationService)
+- BigDecimal 4-decimal precision (정확한 금융 계산)
+- JUnit 5 + AssertJ (BDD 스타일 테스트)
+
+#### 다음 단계 (Phase 3: Infrastructure 계층)
+
+**1. adapter-persistence (MyBatis + PostgreSQL)**
+- [ ] MyBatis Mapper 인터페이스 작성 (UserMapper, DividendMapper, ETFMapper)
+- [ ] MyBatis XML Mapper 작성 (CRUD 쿼리)
+- [ ] Repository 구현체 (UserRepositoryImpl 등)
+- [ ] DB DTO 작성 (도메인 모델과 분리)
+- [ ] 통합 테스트 (Docker PostgreSQL)
+
+**2. adapter-scraper (웹 스크래핑)**
+- [ ] Guggenheim 스크래퍼 (GOF 데이터: 배당, ROC, 레버리지)
+- [ ] NEOS 스크래퍼 (QQQI 데이터: ROC, 배당)
+- [ ] Yahoo Finance API 연동 (시세, NAV)
+- [ ] 나스닥100 지수 데이터 수집
+- [ ] ETFDataPort 구현체
+- [ ] 스크래핑 실패 재시도 로직
+- [ ] 데이터 검증 및 예외 처리
+
+**3. adapter-telegram (텔레그램 봇)**
+- [ ] TelegramBot 구현 (Spring Boot)
+- [ ] 명령어 핸들러 (/start, /register, /portfolio, /add, /remove 등)
+- [ ] NotificationPort 구현체
+- [ ] Markdown 메시지 포맷팅
+- [ ] 에러 핸들링 (봇 비활성화 시)
+
+**4. adapter-scheduler (배당 알림 자동화)**
+- [ ] Spring @Scheduled 기반 스케줄러
+- [ ] 매일 18:00 배당일 체크
+- [ ] ETF별 배당일 조회 (etf_metadata)
+- [ ] 사용자별 배당 알림 발송
+- [ ] 리스크 분석 자동 실행
+- [ ] 예외 처리 및 로깅
+
+**5. adapter-web (REST API, 선택적)**
+- [ ] User 등록/조회 API
+- [ ] Portfolio 관리 API
+- [ ] 리스크 분석 API
+- [ ] DTO 작성 (Request/Response)
+- [ ] OpenAPI 문서화 (Swagger)
+
+**6. bootstrap 모듈 설정**
+- [ ] Spring Boot 설정 완성
+- [ ] 환경별 프로파일 (local, prod)
+- [ ] 로깅 설정 (Logback)
+- [ ] 통합 테스트 환경 구축
+
+---
