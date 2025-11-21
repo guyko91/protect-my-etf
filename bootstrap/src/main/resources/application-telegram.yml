@@ -6,9 +6,8 @@ spring:
 
 telegram:
   bot:
-    token: test-token-for-local
-    username: TestBot
-    chat-id: 123456789
+    token: ${TELEGRAM_BOT_TOKEN:test-token}
+    username: ${TELEGRAM_BOT_USERNAME:TestBot}
 
 ---
 # Production 환경 - Telegram Bot 설정
@@ -21,4 +20,3 @@ telegram:
   bot:
     token: ${TELEGRAM_BOT_TOKEN}
     username: ${TELEGRAM_BOT_USERNAME}
-    chat-id: ${TELEGRAM_CHAT_ID}

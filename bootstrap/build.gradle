@@ -16,6 +16,9 @@ dependencies {
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter'
 
+    // Telegram Bot (for TelegramBotConfig)
+    implementation 'org.telegram:telegrambots-spring-boot-starter:6.9.7.1'
+
     // Lombok
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
