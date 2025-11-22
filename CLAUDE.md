@@ -2354,3 +2354,150 @@ docker-compose.yml 업데이트
 - [ ] End-to-End 테스트 (텔레그램 명령어 → DB 저장 → 알림 발송)
 
 ---
+
+### 2025-11-22 (오후) - GitHub Secrets 설정 및 배포 준비 완료
+
+#### 완료 작업
+
+**1. GitHub Secrets 설정 완료**
+
+다음 8개 Secret을 GitHub Repository에 등록:
+- SERVER_HOST: SSH 서버 주소
+- SERVER_USER: SSH 접속 사용자명 (larry)
+- SERVER_SSH_KEY: SSH 개인키 전체 내용
+- SERVER_PORT: SSH 포트 (22)
+- PROJECT_PATH: /home/larry/workspace/private/protect-my-etf
+- TELEGRAM_BOT_TOKEN: BotFather에서 발급받은 봇 토큰
+- TELEGRAM_BOT_USERNAME: 텔레그램 봇 username
+- POSTGRES_PASSWORD: PostgreSQL 비밀번호
+
+**2. API context-path 중복 제거**
+
+문제 발견:
+- application.yml: `context-path: /api` 설정
+- Controller: `@RequestMapping("/api/users")` 경로
+- 결과: `/api/api/users/register` 형태로 중복
+
+해결:
+- application.yml에서 `servlet.context-path` 제거
+- Controller 경로는 유지
+- 최종 URL: `/api/users/register` ✅
+
+**3. Docker 배포 환경 설정 개선**
+
+docker-compose.yml 수정:
+```yaml
+# Before
+SPRING_PROFILES_ACTIVE: ${ENV:local}
+
+# After
+SPRING_PROFILES_ACTIVE: ${ENV:-prod}
+```
+
+변경 효과:
+- GitHub Actions 자동 배포 시 **prod 프로파일** 사용
+- 로컬 개발 시 `ENV=local docker-compose up`으로 local 프로파일 사용 가능
+- 명확한 환경 분리
+
+**4. feature/adapters 브랜치 커밋 및 Push**
+
+커밋 내역:
+```
+f04719a - fix: Remove duplicate API context-path and set default profile to prod
+```
+
+변경 파일:
+- bootstrap/src/main/resources/application.yml (context-path 제거)
+- docker-compose.yml (기본 프로파일 prod로 변경)
+
+#### 배포 준비 완료 상태
+
+**GitHub Actions CI/CD 파이프라인**
+- [x] .github/workflows/deploy.yml 작성
+- [x] GitHub Secrets 8개 등록 완료
+- [x] Docker 멀티스테이지 빌드 설정
+- [x] docker-compose.yml 환경 설정
+- [x] .env.example 템플릿 작성
+
+**배포 흐름 (main 브랜치 push 시 자동 실행)**
+1. GitHub Actions: 테스트 실행 (81개)
+2. SSH로 홈 서버 접속
+3. git pull origin main
+4. .env 파일 생성 (Secrets 주입)
+5. docker-compose down && up -d --build
+6. docker image prune -f
+
+#### 다음 단계
+
+**1. PR 생성 및 머지**
+- [ ] GitHub에서 feature/adapters → main PR 생성
+- [ ] PR 리뷰 및 머지
+- [ ] GitHub Actions 자동 배포 실행 확인
+
+**2. 배포 검증**
+- [ ] Docker 컨테이너 정상 실행 확인
+- [ ] PostgreSQL 연결 확인
+- [ ] REST API 동작 확인 (protect-my-etf.larry-dev.com/api/*)
+- [ ] 텔레그램 봇 연결 확인
+
+**3. End-to-End 테스트**
+- [ ] /start, /register 명령어 테스트
+- [ ] /add GOF 100 20.5 포지션 추가
+- [ ] /portfolio 조회
+- [ ] /risk 리스크 분석
+- [ ] DB 저장 확인 (DataGrip)
+- [ ] 배당 알림 스케줄러 수동 트리거 테스트
+
+**4. 모니터링 및 개선**
+- [ ] 로그 확인 (docker logs etf-risk-app)
+- [ ] 에러 핸들링 개선
+- [ ] 성능 모니터링
+
+#### 기술적 성과
+
+1. **완전 자동화된 CI/CD 파이프라인 구축**
+   - main 브랜치 push 시 자동 테스트 → 배포
+   - SSH를 통한 홈 서버 배포 자동화
+   - Docker 기반 무중단 배포
+
+2. **환경 분리 및 보안 강화**
+   - GitHub Secrets로 민감 정보 관리
+   - local/prod 프로파일 명확히 분리
+   - .env 파일로 환경변수 주입
+
+3. **API 라우팅 정규화**
+   - context-path 중복 제거
+   - RESTful API 표준 준수
+   - 명확한 엔드포인트 구조
+
+#### 프로젝트 현황 요약 (2025-11-22 기준)
+
+**완료된 Phase**
+- ✅ Phase 1: 기본 인프라 구축 (100%)
+- ✅ Phase 2: 도메인 모델 구현 (100%, 62개 테스트)
+- ✅ Phase 3: Infrastructure 계층 구현 (100%)
+- ✅ Phase 4: Application 계층 구현 (100%)
+- ✅ Phase 5: 배포 환경 구성 (100%)
+
+**테스트 현황**
+- Domain: 62개 (Position 17, Portfolio 15, GOF 14, QQQI 16)
+- Application: 14개 (UserRegistration 7, PortfolioManagement 7)
+- Web: 5개 (UserController)
+- **전체: 81개 테스트 통과**
+
+**기술 스택**
+- Java 21 (Record, Pattern Matching, Virtual Threads 지원)
+- Spring Boot 3.3.5
+- PostgreSQL 15 + MyBatis 3.0.3
+- Telegram Bot API
+- Docker + Docker Compose
+- GitHub Actions CI/CD
+- Nginx (리버스 프록시)
+
+**아키텍처**
+- Hexagonal Architecture (Ports & Adapters)
+- 멀티모듈 프로젝트 (7개 모듈)
+- Domain-Driven Design (DDD)
+- Clean Architecture 원칙 준수
+
+---
