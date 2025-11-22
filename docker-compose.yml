@@ -1,43 +1,23 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: etf-risk-postgres
-    environment:
-      POSTGRES_DB: etf_risk
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      TZ: Asia/Seoul
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/init-db:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: etf-risk-app
+    container_name: protect-my-etf-app
     environment:
+      TZ: Asia/Seoul
       SPRING_PROFILES_ACTIVE: ${ENV:-prod}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etf_risk
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres16:5432/${POSTGRES_DATABASE:-public}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
-      TZ: Asia/Seoul
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - npm_network
 
-volumes:
-  postgres_data:
-    driver: local
+networks:
+  npm_network:
+    external: true
