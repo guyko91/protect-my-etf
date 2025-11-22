@@ -17,6 +17,8 @@ dependencies {
 
     // Test (공통 테스트 의존성은 루트 build.gradle에서 관리)
     testImplementation 'org.springframework:spring-test'
+    testImplementation 'org.mockito:mockito-core:5.8.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.8.0'
 }
 
 dependencyManagement {

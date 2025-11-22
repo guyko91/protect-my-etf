@@ -1898,3 +1898,459 @@ Phase 3 Infrastructure 계층 구현 계속 진행:
 - JWT 인증/인가 (보안 강화)
 
 ---
+
+### 2025-11-21 (오후 2차) - adapter-telegram (텔레그램 봇) 구현 완료
+
+#### 완료 작업
+
+**1. 설정 클래스**
+
+TelegramBotProperties (adapter-telegram/config/)
+- @ConfigurationProperties(prefix = "telegram.bot")
+- token, username 설정 바인딩
+
+**2. 명령어 핸들러 인터페이스 및 구현체 (Strategy 패턴)**
+
+CommandHandler 인터페이스
+- getCommand(): 명령어 문자열 반환
+- getDescription(): 명령어 설명
+- handle(Update): 명령 처리 및 응답 반환
+
+구현된 핸들러 (7개):
+- StartCommandHandler (/start) - 봇 시작 안내
+- HelpCommandHandler (/help) - 도움말 표시
+- RegisterCommandHandler (/register) - 사용자 등록
+- PortfolioCommandHandler (/portfolio) - 포트폴리오 조회
+- AddCommandHandler (/add [심볼] [수량] [평단가]) - 포지션 추가/추가 매수
+- RemoveCommandHandler (/remove [심볼]) - 포지션 전량 매도
+- RiskCommandHandler (/risk) - ETF별 리스크 분석
+
+**3. TelegramBotAdapter**
+
+TelegramLongPollingBot 상속 + NotificationPort 구현
+- 메시지 수신 및 명령어 라우팅
+- 알림 발송 (NotificationPort.send() 구현)
+- Markdown 형식 지원
+- 로깅 (SLF4J)
+
+#### 디렉토리 구조
+
+```
+adapter-telegram/src/main/java/com/etf/risk/adapter/telegram/
+├── config/
+│   └── TelegramBotProperties.java
+├── TelegramBotAdapter.java
+└── command/
+    ├── CommandHandler.java (interface)
+    ├── StartCommandHandler.java
+    ├── HelpCommandHandler.java
+    ├── RegisterCommandHandler.java
+    ├── PortfolioCommandHandler.java
+    ├── AddCommandHandler.java
+    ├── RemoveCommandHandler.java
+    └── RiskCommandHandler.java
+```
+
+#### 주요 설계 특징
+
+1. **Strategy 패턴 활용**: CommandHandler 인터페이스로 명령어 처리 추상화, 새로운 명령어 추가 시 핸들러만 구현
+2. **의존성 주입**: @RequiredArgsConstructor로 간결한 생성자 주입, UseCase 인터페이스에 의존
+3. **에러 처리**: 각 핸들러에서 try-catch로 예외 처리, 사용자 친화적 에러 메시지 반환
+4. **입력 검증**: 지원 ETF 확인 (GOF, QQQI), 수량/가격 양수 검증, 등록 여부 확인
+
+#### 텔레그램 봇 명령어 요약
+
+| 명령어 | 설명 | 예시 |
+|--------|------|------|
+| /start | 봇 시작 및 안내 | /start |
+| /help | 도움말 표시 | /help |
+| /register | 사용자 등록 | /register |
+| /portfolio | 포트폴리오 조회 | /portfolio |
+| /add | 포지션 추가 | /add GOF 100 20.5 |
+| /remove | 포지션 제거 | /remove GOF |
+| /risk | 리스크 분석 | /risk |
+
+#### 빌드 검증
+
+- ./gradlew build -x test 성공
+- 전체 25개 태스크 실행, BUILD SUCCESSFUL
+
+#### 다음 단계
+
+Phase 3 Infrastructure 계층 구현 계속 진행:
+- [x] adapter-scheduler (배당 알림 스케줄러) 구현
+- [ ] bootstrap 모듈 설정 완성 (TelegramBotProperties 활성화)
+- [ ] 통합 테스트
+
+---
+
+### 2025-11-21 (오후 3차) - adapter-scheduler (배당 알림 스케줄러) 구현 완료
+
+#### 완료 작업
+
+**1. SchedulerProperties (설정 클래스)**
+- @ConfigurationProperties(prefix = "scheduler")
+- enabled: 스케줄러 활성화 여부
+- dividend.cron: 크론 표현식
+- dividend.zone: 타임존
+
+**2. DividendScheduler (배당 알림 스케줄러)**
+- @Scheduled로 cron 기반 스케줄링
+- 배당일 체크 로직 (GOF: 말일/31일, QQQI: 28일/말일)
+- ETF별 보유 사용자 조회 후 알림 발송
+- 수동 트리거 메서드 제공 (triggerManually, triggerAllManually)
+
+#### 디렉토리 구조
+
+```
+adapter-scheduler/src/main/java/com/etf/risk/adapter/scheduler/
+├── config/
+│   └── SchedulerProperties.java
+└── DividendScheduler.java
+```
+
+#### 스케줄러 동작 방식
+
+1. **매일 18:00 실행** (cron: "0 0 18 * * ?")
+2. **배당일 체크**: GOF, QQQI 각각의 배당일인지 확인
+3. **사용자 조회**: 해당 ETF 보유 사용자 목록 조회
+4. **알림 발송**: 배당 알림 + 리스크 알림 전송
+5. **에러 처리**: 개별 사용자 실패 시에도 다른 사용자에게 알림 계속
+
+#### 빌드 검증
+
+- ./gradlew build -x test 성공
+- BUILD SUCCESSFUL
+
+#### 다음 단계
+
+- [x] bootstrap 모듈 설정 완성 (ConfigurationProperties 활성화)
+- [ ] 통합 테스트
+
+---
+
+### 2025-11-21 (오후 4차) - bootstrap 모듈 설정 완료
+
+#### 완료 작업
+
+**1. PropertiesConfig**
+- @EnableConfigurationProperties로 설정 클래스 활성화
+- TelegramBotProperties, SchedulerProperties 등록
+
+**2. TelegramBotConfig**
+- TelegramBotsApi를 사용한 봇 등록
+- @PostConstruct로 애플리케이션 시작 시 자동 등록
+
+**3. build.gradle 수정**
+- Telegram 의존성 추가 (TelegramBotConfig에서 사용)
+
+#### 디렉토리 구조
+
+```
+bootstrap/src/main/java/com/etf/risk/
+├── ProtectMyEtfApplication.java
+└── config/
+    ├── PropertiesConfig.java
+    └── TelegramBotConfig.java
+```
+
+#### 빌드 검증
+
+- ./gradlew build -x test 성공
+- BUILD SUCCESSFUL (26 tasks)
+
+#### Infrastructure 계층 구현 완료 현황
+
+| 모듈 | 상태 | 설명 |
+|------|------|------|
+| adapter-persistence | 완료 | MyBatis Mapper, Repository 구현 |
+| adapter-scraper | 완료 | 웹 스크래핑, Yahoo Finance API |
+| adapter-web | 완료 | REST API (User, Portfolio, Risk) |
+| adapter-telegram | 완료 | 텔레그램 봇, 7개 명령어 |
+| adapter-scheduler | 완료 | 배당 알림 스케줄러 |
+| bootstrap | 완료 | Spring Boot 설정, 빈 등록 |
+
+#### 다음 단계
+
+- [x] 통합 테스트
+- [ ] 실제 환경에서 애플리케이션 실행 테스트
+
+---
+
+### 2025-11-21 (오후 5차) - 통합 테스트 작성 완료
+
+#### 완료 작업
+
+**1. Application 계층 테스트**
+
+UserRegistrationServiceTest (7개 테스트)
+- 신규 사용자 등록 성공
+- 이미 등록된 사용자 예외 발생
+- 존재하는 사용자 조회 성공
+- 존재하지 않는 사용자 조회시 예외 발생
+- 등록된 사용자 확인 (true/false)
+
+PortfolioManagementServiceTest (7개 테스트)
+- 신규 포지션 추가 성공
+- 존재하지 않는 사용자 예외 발생
+- 기존 포지션 추가 매수 성공
+- 포지션 제거 성공
+- 사용자 포트폴리오 조회 성공
+- 빈 포트폴리오 조회
+- 특정 포지션 조회 성공/예외
+
+**2. Web 계층 테스트**
+
+UserControllerTest (5개 테스트)
+- POST /api/users/register 성공
+- POST /api/users/register 유효성 검사 실패
+- GET /api/users/chat/{chatId}/exists 등록/미등록 사용자
+- GET /api/users/chat/{chatId} 조회 성공
+
+#### 테스트 결과
+
+```
+./gradlew test
+BUILD SUCCESSFUL in 1s
+23 actionable tasks: 23 up-to-date
+```
+
+**테스트 현황:**
+- Domain: 62개 테스트 (Position 17, Portfolio 15, GOF 14, QQQI 16)
+- Application: 14개 테스트
+- Web: 5개 테스트
+- **총 81개 테스트 통과**
+
+#### 테스트 디렉토리 구조
+
+```
+domain/src/test/java/com/etf/risk/domain/model/
+├── portfolio/
+│   ├── PositionTest.java
+│   └── PortfolioTest.java
+└── etf/
+    ├── GOFTest.java
+    └── QQQITest.java
+
+application/src/test/java/com/etf/risk/application/service/
+├── UserRegistrationServiceTest.java
+└── PortfolioManagementServiceTest.java
+
+adapter-web/src/test/java/com/etf/risk/adapter/web/controller/
+└── UserControllerTest.java
+```
+
+#### 다음 단계
+
+- [x] adapter-telegram 구현
+- [x] adapter-scheduler 구현
+- [x] bootstrap 설정 완성
+- [ ] 실제 환경에서 애플리케이션 실행 테스트 (Docker + PostgreSQL + Telegram)
+
+---
+
+### 2025-11-21 (오후 6차) - Infrastructure 계층 완성 및 설정 정리
+
+#### 완료 작업
+
+**1. adapter-telegram (텔레그램 봇) 구현**
+
+TelegramBotProperties (config)
+- telegram.bot.token, telegram.bot.username 바인딩
+
+CommandHandler Interface (Strategy 패턴)
+- getCommand(): 명령어 반환
+- getDescription(): 설명 반환
+- handle(Update): 명령어 처리
+
+Command Handlers (7개)
+- StartCommandHandler: /start 환영 메시지
+- HelpCommandHandler: /help 명령어 목록
+- RegisterCommandHandler: /register 사용자 등록
+- PortfolioCommandHandler: /portfolio 포트폴리오 조회
+- AddCommandHandler: /add 포지션 추가
+- RemoveCommandHandler: /remove 포지션 제거
+- RiskCommandHandler: /risk 리스크 분석
+
+TelegramBotAdapter
+- TelegramLongPollingBot 상속
+- NotificationPort 구현
+- Map<String, CommandHandler>로 명령어 라우팅
+- 알림 메시지 전송 기능
+
+**2. adapter-scheduler (배당 알림 스케줄러) 구현**
+
+SchedulerProperties (config)
+- scheduler.enabled: 스케줄러 활성화 여부
+- scheduler.dividend.cron: cron 표현식 (기본: 0 0 18 * * ?)
+- scheduler.dividend.zone: 타임존 (기본: Asia/Seoul)
+
+DividendScheduler
+- @Scheduled cron job으로 매일 18:00 실행
+- GOF 배당일: 31일 (말일)
+- QQQI 배당일: 28일 (말일)
+- 월별 마지막 날 처리 로직 포함
+- 수동 트리거 메서드 제공 (processGOFDividend, processQQQIDividend, processAll)
+
+**3. bootstrap 모듈 설정**
+
+PropertiesConfig
+- @EnableConfigurationProperties로 설정 클래스 활성화
+- TelegramBotProperties, SchedulerProperties 등록
+
+TelegramBotConfig
+- @PostConstruct에서 TelegramBotsApi에 봇 등록
+- DefaultBotSession 사용
+
+build.gradle 의존성
+- telegrambots-spring-boot-starter:6.9.7.1 추가
+
+**4. 설정 파일 정리**
+
+application-telegram.yml
+- 미사용 chat-id 설정 제거
+- token과 username만 유지
+
+docker-compose.yml
+- pgAdmin 서비스 제거 (DataGrip 사용 예정)
+- PostgreSQL만 유지
+
+#### 디렉토리 구조
+
+```
+infrastructure/adapter-telegram/src/main/java/com/etf/risk/adapter/telegram/
+├── config/
+│   └── TelegramBotProperties.java
+├── command/
+│   ├── CommandHandler.java
+│   ├── StartCommandHandler.java
+│   ├── HelpCommandHandler.java
+│   ├── RegisterCommandHandler.java
+│   ├── PortfolioCommandHandler.java
+│   ├── AddCommandHandler.java
+│   ├── RemoveCommandHandler.java
+│   └── RiskCommandHandler.java
+└── TelegramBotAdapter.java
+
+infrastructure/adapter-scheduler/src/main/java/com/etf/risk/adapter/scheduler/
+├── config/
+│   └── SchedulerProperties.java
+└── DividendScheduler.java
+
+bootstrap/src/main/java/com/etf/risk/config/
+├── PropertiesConfig.java
+└── TelegramBotConfig.java
+```
+
+#### 테스트 결과
+
+- 전체 빌드 성공: ./gradlew build
+- 81개 테스트 통과 (Domain 62, Application 14, Web 5)
+
+#### Phase 3 완료 상태
+
+**Infrastructure 계층 (100% 완료)**
+- [x] adapter-persistence (MyBatis + PostgreSQL)
+- [x] adapter-scraper (웹 스크래핑 + Yahoo Finance API)
+- [x] adapter-web (REST API)
+- [x] adapter-telegram (텔레그램 봇)
+- [x] adapter-scheduler (배당 알림 스케줄러)
+
+**Bootstrap 모듈 (100% 완료)**
+- [x] ConfigurationProperties 활성화
+- [x] TelegramBot 등록
+- [x] 환경별 프로파일 설정
+
+#### 실행에 필요한 환경 변수
+
+```bash
+# 텔레그램 봇 (BotFather에서 발급)
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_BOT_USERNAME=your-bot-username
+
+# 데이터베이스 (docker-compose.yml에 정의된 기본값 사용 가능)
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/etf_risk
+SPRING_DATASOURCE_USERNAME=postgres
+SPRING_DATASOURCE_PASSWORD=postgres
+```
+
+#### 애플리케이션 실행 방법
+
+```bash
+# 1. PostgreSQL 실행
+docker-compose up -d postgres
+
+# 2. 환경 변수 설정 (텔레그램 토큰 필요)
+export TELEGRAM_BOT_TOKEN=your-token
+export TELEGRAM_BOT_USERNAME=your-bot-name
+
+# 3. 애플리케이션 실행
+./gradlew :bootstrap:bootRun --args='--spring.profiles.active=local'
+```
+
+#### 다음 단계
+
+- [x] BotFather에서 텔레그램 봇 토큰 발급
+- [ ] 실제 환경에서 애플리케이션 실행 테스트
+- [ ] End-to-End 테스트 (텔레그램 명령어 → DB 저장 → 알림 발송)
+
+---
+
+### 2025-11-22 - Docker 배포 및 GitHub Actions CI/CD 설정
+
+#### 완료 작업
+
+**1. Docker 배포 환경 구성**
+
+Dockerfile (멀티스테이지 빌드)
+- Build stage: gradle:8.5-jdk21
+- Run stage: eclipse-temurin:21-jre-alpine
+- bootJar로 빌드 후 경량 이미지로 실행
+
+docker-compose.yml 업데이트
+- app 서비스 추가 (Spring Boot 애플리케이션)
+- .env 파일 연동 (환경변수 주입)
+- postgres 서비스 health check 후 app 시작
+- restart: unless-stopped 설정
+
+.env.example 생성
+- 환경변수 템플릿 (Git에 커밋)
+- TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, POSTGRES_PASSWORD
+
+**2. GitHub Actions CI/CD 파이프라인**
+
+.github/workflows/deploy.yml
+- main 브랜치 push 시 자동 배포
+- workflow_dispatch로 수동 실행 가능
+- 테스트 실행 후 배포 (test → deploy)
+- SSH로 홈 서버 접속하여 배포
+
+배포 흐름:
+1. 테스트 실행 (./gradlew test)
+2. SSH로 홈 서버 접속
+3. git pull origin main
+4. .env 파일 생성 (시크릿 주입)
+5. docker-compose down && up -d --build
+6. docker image prune -f
+
+#### GitHub Secrets 설정 필요
+
+| Secret | 설명 |
+|--------|------|
+| SERVER_HOST | 홈 서버 IP/도메인 |
+| SERVER_USER | SSH 사용자 |
+| SERVER_SSH_KEY | SSH 개인키 (전체) |
+| SERVER_PORT | SSH 포트 |
+| PROJECT_PATH | /home/larry/workspace/private/protect-my-etf |
+| TELEGRAM_BOT_TOKEN | 텔레그램 봇 토큰 |
+| TELEGRAM_BOT_USERNAME | 텔레그램 봇 이름 |
+| POSTGRES_PASSWORD | DB 비밀번호 |
+
+#### 다음 단계
+
+- [ ] GitHub Secrets 등록
+- [ ] 홈 서버에 git clone (최초 1회)
+- [ ] GitHub Actions 배포 테스트
+- [ ] End-to-End 테스트 (텔레그램 명령어 → DB 저장 → 알림 발송)
+
+---
